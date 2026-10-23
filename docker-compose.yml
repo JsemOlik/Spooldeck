@@ -7,11 +7,30 @@ services:
     ports:
       - "3000:3000"
     environment:
+      DATABASE_URL: postgres://spooldeck:${POSTGRES_PASSWORD:-spooldeck}@postgres:5432/spooldeck
       # The address you open Spooldeck at; encoded into label QR codes.
       # Can also be set later under Settings.
       PUBLIC_URL: ${PUBLIC_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: spooldeck-postgres
+    restart: unless-stopped
+    # Not published on the host; only the app container talks to it.
+    environment:
+      POSTGRES_USER: spooldeck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spooldeck}
+      POSTGRES_DB: spooldeck
     volumes:
-      - spooldeck-data:/data
+      - spooldeck-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spooldeck -d spooldeck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
-  spooldeck-data:
+  spooldeck-postgres:
