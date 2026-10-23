@@ -11,12 +11,15 @@ Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
 
 ## Quick start (Docker)
 
+Spooldeck expects to sit behind a reverse proxy container on a shared Docker network called `proxy` (see [HTTPS and the camera](#https-and-the-camera)). Create the network once if you don't have it yet:
+
 ```bash
+docker network create proxy
 docker compose up -d --build
 docker compose logs spooldeck
 ```
 
-The logs print a **one-time setup code**. Open `http://<host>:3000/setup`, enter the code and create your account. The code means a stranger can't claim a fresh instance that happens to be reachable before you set it up.
+The logs print a **one-time setup code**. Open `https://<your domain>/setup`, enter the code and create your account. The code means a stranger can't claim a fresh instance that happens to be reachable before you set it up.
 
 Compose runs Spooldeck next to a PostgreSQL 17 container. The database isn't published on the host, and its data lives in the `spooldeck-postgres` volume. Migrations run automatically on start. Set `POSTGRES_PASSWORD` in a `.env` file next to `docker-compose.yml` before the first start.
 
@@ -49,13 +52,17 @@ Browsers only allow live camera scanning on **HTTPS** or `localhost`. On plain H
 - **Photo scan:** "Scan from a photo" on the Scan page decodes a picture of any QR code, including Prusament ones.
 - **Paste:** paste a Prusament link or type a spool code by hand.
 
-For live scanning and secure cookies, put Spooldeck behind a TLS reverse proxy. With [Caddy](https://caddyserver.com):
+For live scanning and secure cookies, put Spooldeck behind a TLS reverse proxy. The compose file doesn't publish any ports. Instead it joins the external `proxy` network, so a proxy container on that network reaches it as `spooldeck:3000`. With [Caddy](https://caddyserver.com) running in Docker on the `proxy` network:
 
 ```caddyfile
 spools.example.com {
-	reverse_proxy localhost:3000
+	reverse_proxy spooldeck:3000
 }
 ```
+
+Spooldeck relies on the `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Forwarded-For` headers, which Caddy sets by default. They decide secure cookies, the address in QR codes and login rate limiting, so don't publish port 3000 next to the proxy: anyone reaching the app directly could forge them.
+
+No reverse proxy? Uncomment the `ports` block in `docker-compose.yml` and remove the `proxy` network from the `spooldeck` service and the `networks` section.
 
 Then set `PUBLIC_URL=https://spools.example.com` so printed labels point at the HTTPS address.
 
