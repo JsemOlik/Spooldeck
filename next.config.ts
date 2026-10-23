@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Dev logs Server Function calls with their arguments, which would print passwords from the auth forms.
+  logging: { serverFunctions: false },
   turbopack: {
     rules: {
       "*.css": {
