@@ -28,7 +28,9 @@ export const db = new Proxy({} as Db, {
   get(_, prop) {
     const real = getDb();
     const value = Reflect.get(real, prop, real);
-    return typeof value === "function" ? value.bind(real) : value;
+    // Bind drizzle's methods, but hand out own properties like $client (itself a function
+    // with methods such as .end()) untouched.
+    return typeof value === "function" && !Object.hasOwn(real, prop) ? value.bind(real) : value;
   },
 });
 
