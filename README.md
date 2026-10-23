@@ -1,4 +1,4 @@
-<h1 align="center">
+<h1>
   <img src="src/app/icon.svg" alt="" width="72" height="72" align="absmiddle" />
   Spooldeck
 </h1>
@@ -11,6 +11,26 @@ A self-hosted filament tracker for 3D printing. It runs as a single-user app wit
 - **Keep the details:** brand, material, color, temps, drying settings, price, where you bought it and storage location, plus dated notes like "strings above 230 °C" for the next time you use the same filament.
 
 Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
+
+## Screenshots
+
+![Dashboard with spools in stock, filament on hand, inventory value, a running-low list and recent prints](docs/screenshots/dashboard.png)
+
+<p>
+  <img src="docs/screenshots/spools.png" alt="Spool list with color swatches, remaining weight bars, status and storage location" width="49%" />
+  <img src="docs/screenshots/spool.png" alt="Spool page with remaining weight, usage history with cost per print, print settings and purchase details" width="49%" />
+</p>
+<p>
+  <img src="docs/screenshots/filament.png" alt="Filament page with dated notes, print settings and every spool bought with its price per kg" width="49%" />
+  <img src="docs/screenshots/labels.png" alt="Label designer with a QR label preview, size presets and spool selection" width="49%" />
+</p>
+
+On a phone, the sidebar becomes a bottom bar with the scanner in the middle:
+
+<p>
+  <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard on a phone" width="32%" />
+  <img src="docs/screenshots/mobile-spool.png" alt="Spool page on a phone" width="32%" />
+</p>
 
 ## Quick start (Docker)
 
