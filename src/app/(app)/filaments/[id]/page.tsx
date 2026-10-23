@@ -42,38 +42,41 @@ export default async function FilamentPage({ params }: PageProps<"/filaments/[id
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-start gap-4">
-        {f.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={f.imageUrl} alt="" className="size-20 rounded-lg border bg-white object-contain" />
-        ) : (
-          <ColorSwatch hex={f.colorHex} className="size-16" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            {f.imageUrl && <ColorSwatch hex={f.colorHex} className="size-4" />}
-            {[f.brand?.name, f.material?.name, `${f.diameter} mm`].filter(Boolean).join(" · ")}
-            {f.archived && <Badge variant="outline">Archived</Badge>}
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{f.colorName || f.name}</h1>
-          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 text-sm">
-            {f.colorName && <span>{f.name}</span>}
-            {f.rating != null && (
-              <span className="flex items-center gap-0.5" aria-label={`Rated ${f.rating} of 5`}>
-                {Array.from({ length: 5 }, (_, i) => (
-                  <StarIcon key={i} className={i < f.rating! ? "size-3.5 fill-current text-amber-500" : "size-3.5"} />
-                ))}
-              </span>
-            )}
-            {f.productUrl && (
-              <a href={f.productUrl} target="_blank" rel="noreferrer noopener" className="text-primary inline-flex items-center gap-1 hover:underline">
-                Product page <ExternalLinkIcon className="size-3" />
-              </a>
-            )}
+      {/* On phones the actions drop below the title so the name gets the full width. */}
+      <div className="grid gap-4 sm:flex sm:items-start">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          {f.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={f.imageUrl} alt="" className="size-16 shrink-0 rounded-lg border bg-white object-contain sm:size-20" />
+          ) : (
+            <ColorSwatch hex={f.colorHex} className="size-16 shrink-0" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              {f.imageUrl && <ColorSwatch hex={f.colorHex} className="size-4" />}
+              <span>{[f.brand?.name, f.material?.name, `${f.diameter} mm`].filter(Boolean).join(" · ")}</span>
+              {f.archived && <Badge variant="outline">Archived</Badge>}
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight break-words">{f.colorName || f.name}</h1>
+            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 text-sm">
+              {f.colorName && <span>{f.name}</span>}
+              {f.rating != null && (
+                <span className="flex items-center gap-0.5" aria-label={`Rated ${f.rating} of 5`}>
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <StarIcon key={i} className={i < f.rating! ? "size-3.5 fill-current text-amber-500" : "size-3.5"} />
+                  ))}
+                </span>
+              )}
+              {f.productUrl && (
+                <a href={f.productUrl} target="_blank" rel="noreferrer noopener" className="text-primary inline-flex items-center gap-1 hover:underline">
+                  Product page <ExternalLinkIcon className="size-3" />
+                </a>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button asChild>
+          <Button asChild className="flex-1 sm:flex-none">
             <Link href={`/spools/new?filament=${f.id}`}>
               <PlusIcon />
               Add spool

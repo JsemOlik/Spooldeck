@@ -24,7 +24,7 @@ export function NoteForm({ filamentId, spoolId }: { filamentId: number; spoolId?
       {spoolId && <input type="hidden" name="spoolId" value={spoolId} />}
       <Textarea name="body" rows={2} placeholder="e.g. Strings above 220 °C, 0.4 mm retraction works well…" required />
       <div className="flex justify-end">
-        <SubmitButton size="sm" variant="secondary">
+        <SubmitButton size="sm" variant="secondary" className="w-full sm:w-auto">
           Add note
         </SubmitButton>
       </div>
@@ -51,7 +51,7 @@ export function NotesList({ notes, emptyText = "No notes yet." }: { notes: Note[
             <Button
               variant="ghost"
               size="icon-xs"
-              className="ml-auto opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              className="ml-auto pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100"
               aria-label="Delete note"
               onClick={() => startTransition(() => deleteNoteAction(n.id))}
             >
