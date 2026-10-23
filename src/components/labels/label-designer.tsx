@@ -442,9 +442,9 @@ function sheetOverflow({ widthMm, heightMm, sheet }: LabelConfig) {
 function LabelPreview({ data, config }: { data: LabelData; config: LabelConfig }) {
   const wPx = config.widthMm * MM_TO_PX;
   const hPx = config.heightMm * MM_TO_PX;
-  const scale = Math.min(3, 300 / wPx, 260 / hPx);
+  const scale = Math.min(3, 250 / wPx, 260 / hPx);
   return (
-    <div className="bg-muted/60 flex justify-center rounded-lg p-6">
+    <div className="bg-muted/60 flex justify-center rounded-lg p-4 sm:p-6">
       <div className="shadow-md" style={{ width: wPx * scale, height: hPx * scale }} data-testid="label-preview">
         <div style={{ width: wPx, height: hPx, transform: `scale(${scale})`, transformOrigin: "top left" }}>
           <LabelView data={data} config={config} />

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { db } from "@/db";
 import { brands, filaments, materials, spools, usageLogs, vendors, type SpoolStatus } from "@/db/schema";
 
@@ -158,3 +158,12 @@ export async function getSpoolsForLabels(ids: number[]) {
 }
 
 export type LabelSpool = Awaited<ReturnType<typeof getSpoolsForLabels>>[number];
+
+export async function listLocationsWithCounts() {
+  return db
+    .select({ name: sql<string>`${spools.location}`, spools: count(spools.id) })
+    .from(spools)
+    .where(and(sql`${spools.location} is not null`, ne(spools.location, "")))
+    .groupBy(spools.location)
+    .orderBy(asc(spools.location));
+}

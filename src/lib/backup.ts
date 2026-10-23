@@ -1,0 +1,132 @@
+import "server-only";
+import { getTableColumns, ne, type InferInsertModel } from "drizzle-orm";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { db } from "@/db";
+import {
+  brands,
+  filamentNotes,
+  filaments,
+  labelTemplates,
+  materials,
+  settings,
+  spools,
+  usageLogs,
+  vendors,
+} from "@/db/schema";
+
+export const BACKUP_VERSION = 1;
+
+// Insert order (parents first). Users and sessions are never exported.
+const TABLES = {
+  brands,
+  vendors,
+  materials,
+  filaments,
+  spools,
+  usageLogs,
+  filamentNotes,
+  labelTemplates,
+  settings,
+} as const satisfies Record<string, SQLiteTable>;
+type TableName = keyof typeof TABLES;
+
+export type Backup = {
+  app: "spooldeck";
+  version: number;
+  exportedAt: string;
+  data: { [K in TableName]: InferInsertModel<(typeof TABLES)[K]>[] };
+};
+
+export async function exportBackup(): Promise<Backup> {
+  const data = {} as Record<TableName, unknown[]>;
+  for (const name of Object.keys(TABLES) as TableName[]) {
+    data[name] =
+      name === "settings"
+        ? await db.select().from(settings).where(ne(settings.key, "setup_code"))
+        : await db.select().from(TABLES[name] as SQLiteTable);
+  }
+  return { app: "spooldeck", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), data } as Backup;
+}
+
+export class BackupError extends Error {}
+
+/** Checks each row against the table's columns and converts JSON values back to column types. */
+function coerceRows(name: TableName, rows: unknown): Record<string, unknown>[] {
+  if (rows === undefined) return [];
+  if (!Array.isArray(rows)) throw new BackupError(`“${name}” must be a list`);
+  const columns = getTableColumns(TABLES[name] as SQLiteTable);
+  return rows.map((row, i) => {
+    if (!row || typeof row !== "object") throw new BackupError(`${name}[${i}] is not an object`);
+    const out: Record<string, unknown> = {};
+    for (const [key, col] of Object.entries(columns)) {
+      const value = (row as Record<string, unknown>)[key];
+      const where = `${name}[${i}].${key}`;
+      if (value === undefined || value === null) {
+        if (col.notNull && !col.hasDefault) throw new BackupError(`${where} is required`);
+        if (value === null) out[key] = null;
+        continue;
+      }
+      switch (col.dataType) {
+        case "date": {
+          const d = new Date(value as string | number);
+          if (Number.isNaN(d.getTime())) throw new BackupError(`${where} is not a valid date`);
+          out[key] = d;
+          break;
+        }
+        case "number":
+          if (typeof value !== "number" || !Number.isFinite(value)) throw new BackupError(`${where} must be a number`);
+          out[key] = value;
+          break;
+        case "boolean":
+          if (typeof value !== "boolean") throw new BackupError(`${where} must be true or false`);
+          out[key] = value;
+          break;
+        case "string":
+          if (typeof value !== "string") throw new BackupError(`${where} must be text`);
+          if ("enumValues" in col && Array.isArray(col.enumValues) && col.enumValues.length && !col.enumValues.includes(value)) {
+            throw new BackupError(`${where} has an unknown value “${value}”`);
+          }
+          out[key] = value;
+          break;
+        default:
+          out[key] = value;
+      }
+    }
+    return out;
+  });
+}
+
+export function parseBackup(json: unknown) {
+  if (!json || typeof json !== "object" || (json as Backup).app !== "spooldeck") {
+    throw new BackupError("This isn't a Spooldeck backup file.");
+  }
+  const backup = json as Backup;
+  if (typeof backup.version !== "number" || backup.version > BACKUP_VERSION) {
+    throw new BackupError("This backup was made by a newer version of Spooldeck.");
+  }
+  if (!backup.data || typeof backup.data !== "object") throw new BackupError("The backup has no data.");
+  const parsed = {} as Record<TableName, Record<string, unknown>[]>;
+  for (const name of Object.keys(TABLES) as TableName[]) {
+    parsed[name] = coerceRows(name, (backup.data as Record<string, unknown>)[name]);
+  }
+  return parsed;
+}
+
+/** Replaces all inventory data with the backup's contents in one transaction. Returns row counts. */
+export async function restoreBackup(json: unknown) {
+  const data = parseBackup(json);
+  const names = Object.keys(TABLES) as TableName[];
+  await db.transaction(async (tx) => {
+    for (const name of [...names].reverse()) {
+      if (name === "settings") await tx.delete(settings).where(ne(settings.key, "setup_code"));
+      else await tx.delete(TABLES[name] as SQLiteTable);
+    }
+    for (const name of names) {
+      const rows = data[name];
+      for (let i = 0; i < rows.length; i += 200) {
+        await tx.insert(TABLES[name] as SQLiteTable).values(rows.slice(i, i + 200) as never);
+      }
+    }
+  });
+  return Object.fromEntries(names.map((n) => [n, data[n].length])) as Record<TableName, number>;
+}

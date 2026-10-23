@@ -94,3 +94,51 @@ export function nullify<T extends Record<string, unknown>>(
 ): { [K in keyof T]-?: undefined extends T[K] ? Exclude<T[K], undefined> | null : T[K] } {
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v === undefined ? null : v])) as never;
 }
+
+export const brandSchema = z.object({ name: str(100).min(1, "Name is required"), website: optUrl });
+
+export const vendorSchema = z.object({
+  name: str(100).min(1, "Name is required"),
+  url: optUrl,
+  notes: optStr(1000),
+});
+
+export const materialSchema = z
+  .object({
+    name: str(50).min(1, "Name is required"),
+    density: num().min(0.5, "Min 0.5").max(3, "Max 3"),
+    nozzleMin: optInt(100, 500),
+    nozzleMax: optInt(100, 500),
+    bedMin: optInt(0, 200),
+    bedMax: optInt(0, 200),
+    notes: optStr(1000),
+  })
+  .refine((v) => v.nozzleMin == null || v.nozzleMax == null || v.nozzleMin <= v.nozzleMax, {
+    path: ["nozzleMax"],
+    message: "Must be ≥ min",
+  })
+  .refine((v) => v.bedMin == null || v.bedMax == null || v.bedMin <= v.bedMax, {
+    path: ["bedMax"],
+    message: "Must be ≥ min",
+  });
+
+export const appSettingsSchema = z.object({
+  currency: z
+    .string({ error: "Currency is required" })
+    .transform((v) => v.toUpperCase())
+    .refine((v) => {
+      if (!/^[A-Z]{3}$/.test(v)) return false;
+      try {
+        new Intl.NumberFormat("en", { style: "currency", currency: v });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Use a 3-letter currency code like EUR or USD"),
+  lowStockGrams: num().int("Must be a whole number").min(0, "Min 0").max(10_000, "Max 10000"),
+  publicUrl: z
+    .url({ protocol: /^https?$/, error: "Must be an http(s) URL like https://spools.example.com" })
+    .max(500)
+    .transform((v) => v.replace(/\/+$/, ""))
+    .optional(),
+});
