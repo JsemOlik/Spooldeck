@@ -26,14 +26,18 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const parts = stored.split("$");
   if (parts.length !== 6 || parts[0] !== "scrypt") return false;
   const [, n, r, p, saltB64, hashB64] = parts;
+  const [N, R, P] = [Number(n), Number(r), Number(p)];
+  // Bound the cost parameters so a corrupted hash can't throw or exhaust memory.
+  const validN = Number.isInteger(N) && N >= 2 && N <= 2 ** 20 && (N & (N - 1)) === 0;
+  if (!validN || !Number.isInteger(R) || R < 1 || R > 32 || !Number.isInteger(P) || P < 1 || P > 16) return false;
   const expected = Buffer.from(hashB64, "base64");
-  const key = await scrypt(
-    password,
-    Buffer.from(saltB64, "base64"),
-    expected.length,
-    options(Number(n), Number(r), Number(p)),
-  );
-  return key.length === expected.length && timingSafeEqual(key, expected);
+  if (expected.length < 16) return false;
+  try {
+    const key = await scrypt(password, Buffer.from(saltB64, "base64"), expected.length, options(N, R, P));
+    return timingSafeEqual(key, expected);
+  } catch {
+    return false;
+  }
 }
 
 export const PASSWORD_MIN_LENGTH = 10;
