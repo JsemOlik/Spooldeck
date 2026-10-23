@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  extractPrices,
   extractSpoolData,
   fetchPrusamentSpool,
   mapPrusamentData,
   parsePrusamentUrl,
+  pickPrice,
   PrusamentError,
 } from "@/lib/prusament";
 
@@ -60,6 +62,34 @@ describe("extractSpoolData", () => {
   });
 });
 
+describe("extractPrices", () => {
+  test("reads every currency from the price block", () => {
+    expect(extractPrices(fixture)).toEqual([
+      { amount: 32.99, currency: "USD" },
+      { amount: 32.99, currency: "EUR" },
+    ]);
+  });
+
+  test("handles thousands separators and decimal commas", () => {
+    expect(extractPrices('<div class="price">1 099 CZK / 1,234.50 USD / 29,99 EUR</div>')).toEqual([
+      { amount: 1099, currency: "CZK" },
+      { amount: 1234.5, currency: "USD" },
+      { amount: 29.99, currency: "EUR" },
+    ]);
+  });
+
+  test("returns nothing when the page has no price", () => {
+    expect(extractPrices("<h1>Prusament</h1>")).toEqual([]);
+  });
+
+  test("prefers the app's currency", () => {
+    const prices = extractPrices(fixture);
+    expect(pickPrice(prices, "eur")).toEqual({ amount: 32.99, currency: "EUR" });
+    expect(pickPrice(prices, "CZK")).toEqual({ amount: 32.99, currency: "USD" });
+    expect(pickPrice([], "EUR")).toBeNull();
+  });
+});
+
 describe("mapPrusamentData", () => {
   test("maps the fixture to filament and spool fields", () => {
     const mapped = mapPrusamentData(extractSpoolData(fixture)!, ref);
@@ -97,8 +127,10 @@ describe("fetchPrusamentSpool", () => {
       requested = input;
       return Object.defineProperty(new Response(fixture), "url", { value: input });
     }) as unknown as typeof fetch;
-    await fetchPrusamentSpool(ref, spy);
+    const page = await fetchPrusamentSpool(ref, spy);
     expect(new URL(requested).hostname).toBe("prusament.com");
+    expect(page.data.weight).toBe(1071);
+    expect(page.prices).toHaveLength(2);
   });
 
   test("rejects redirects to other hosts", async () => {

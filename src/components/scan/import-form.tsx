@@ -8,16 +8,19 @@ import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { initialActionState } from "@/lib/action-state";
+import type { PrusamentPrice } from "@/lib/prusament";
 
 export function ImportForm({
   url,
   currency,
+  listPrice,
   vendors,
   locations,
   initialWeight,
 }: {
   url: string;
   currency: string;
+  listPrice: PrusamentPrice | null;
   vendors: string[];
   locations: string[];
   initialWeight: number;
@@ -31,11 +34,29 @@ export function ImportForm({
         <FormError message={state.error} />
       </div>
       <div className="grid grid-cols-[1fr_6rem] gap-2">
-        <Field label="Price" htmlFor="price" error={fe.price}>
-          <Input id="price" name="price" inputMode="decimal" placeholder="29.99" autoFocus />
+        <Field
+          label="Price"
+          htmlFor="price"
+          error={fe.price}
+          hint={listPrice ? "Prusament's current list price. Change it if you paid something else." : undefined}
+        >
+          <Input
+            id="price"
+            name="price"
+            inputMode="decimal"
+            placeholder="29.99"
+            defaultValue={listPrice?.amount}
+            autoFocus
+          />
         </Field>
         <Field label="Currency" htmlFor="currency" error={fe.currency}>
-          <Input id="currency" name="currency" defaultValue={currency} maxLength={3} className="uppercase" />
+          <Input
+            id="currency"
+            name="currency"
+            defaultValue={listPrice?.currency ?? currency}
+            maxLength={3}
+            className="uppercase"
+          />
         </Field>
       </div>
       <Field label="Bought from" htmlFor="vendor" error={fe.vendor}>

@@ -70,9 +70,40 @@ export function extractSpoolData(html: string): PrusamentData | null {
   return parsed.success ? parsed.data : null;
 }
 
+export type PrusamentPrice = { amount: number; currency: string };
+
+function parseAmount(raw: string) {
+  let s = raw.replace(/[\s\u00a0]/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/,/g, "");
+  else if (/,\d{1,2}$/.test(s)) s = s.replace(",", ".");
+  else s = s.replace(/,/g, "");
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Reads the list prices shown on a spool page, e.g. `<div class="price">32.99 USD / 32.99 EUR</div>`. */
+export function extractPrices(html: string): PrusamentPrice[] {
+  const block = /<div[^>]*class="[^"]*\bprice\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(html);
+  if (!block) return [];
+  const text = block[1].replace(/<small[\s\S]*?<\/small>/gi, "").replace(/<[^>]+>/g, " ");
+  const prices: PrusamentPrice[] = [];
+  for (const m of text.matchAll(/(\d[\d\s\u00a0.,]*?)\s*([A-Z]{3})\b/g)) {
+    const amount = parseAmount(m[1]);
+    if (amount != null && !prices.some((p) => p.currency === m[2])) prices.push({ amount, currency: m[2] });
+  }
+  return prices;
+}
+
+/** Picks the list price in the preferred currency, falling back to the first one shown. */
+export function pickPrice(prices: PrusamentPrice[], currency: string) {
+  return prices.find((p) => p.currency === currency.toUpperCase()) ?? prices[0] ?? null;
+}
+
 export class PrusamentError extends Error {}
 
-export async function fetchPrusamentSpool(ref: PrusamentRef, fetchImpl: typeof fetch = fetch): Promise<PrusamentData> {
+export type PrusamentPage = { data: PrusamentData; prices: PrusamentPrice[] };
+
+export async function fetchPrusamentSpool(ref: PrusamentRef, fetchImpl: typeof fetch = fetch): Promise<PrusamentPage> {
   const url = prusamentSpoolUrl(ref);
   let res: Response;
   try {
@@ -88,9 +119,10 @@ export async function fetchPrusamentSpool(ref: PrusamentRef, fetchImpl: typeof f
   if (!res.ok) throw new PrusamentError(`prusament.com answered ${res.status}`);
   const finalHost = new URL(res.url || url).hostname;
   if (!/(^|\.)prusament\.com$/.test(finalHost)) throw new PrusamentError("Unexpected redirect away from prusament.com");
-  const data = extractSpoolData(await res.text());
+  const html = await res.text();
+  const data = extractSpoolData(html);
   if (!data) throw new PrusamentError("Spool not found on prusament.com");
-  return data;
+  return { data, prices: extractPrices(html) };
 }
 
 function nominalWeightFromName(name: string, fallback: number) {

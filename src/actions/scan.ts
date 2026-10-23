@@ -54,7 +54,7 @@ export async function importPrusamentAction(_prev: ActionState, formData: FormDa
 
   let mapped;
   try {
-    mapped = mapPrusamentData(await fetchPrusamentSpool(ref), ref);
+    mapped = mapPrusamentData((await fetchPrusamentSpool(ref)).data, ref);
   } catch (e) {
     return { error: e instanceof PrusamentError ? e.message : "Import failed." };
   }

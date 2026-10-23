@@ -11,9 +11,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listVendors } from "@/db/queries/catalog";
 import { findFilamentByGoodsId } from "@/db/queries/filaments";
 import { getSpoolIdByPrusamentId, listLocations } from "@/db/queries/spools";
-import { formatDate, formatGrams, formatLength, formatRange } from "@/lib/format";
+import { formatDate, formatGrams, formatLength, formatMoney, formatRange } from "@/lib/format";
 import { strParam } from "@/lib/params";
-import { PrusamentError, fetchPrusamentSpool, mapPrusamentData, parsePrusamentUrl, prusamentSpoolUrl } from "@/lib/prusament";
+import {
+  PrusamentError,
+  type PrusamentPrice,
+  fetchPrusamentSpool,
+  mapPrusamentData,
+  parsePrusamentUrl,
+  pickPrice,
+  prusamentSpoolUrl,
+} from "@/lib/prusament";
 import { getAppSettings } from "@/lib/settings";
 
 export const metadata: Metadata = { title: "Import Prusament spool" };
@@ -27,9 +35,12 @@ export default async function PrusamentImportPage({ searchParams }: PageProps<"/
 
   const url = prusamentSpoolUrl(ref);
   let mapped;
+  let prices: PrusamentPrice[] = [];
   let error: string | null = null;
   try {
-    mapped = mapPrusamentData(await fetchPrusamentSpool(ref), ref);
+    const page = await fetchPrusamentSpool(ref);
+    mapped = mapPrusamentData(page.data, ref);
+    prices = page.prices;
   } catch (e) {
     error = e instanceof PrusamentError ? e.message : "Something went wrong talking to prusament.com.";
   }
@@ -114,6 +125,7 @@ export default async function PrusamentImportPage({ searchParams }: PageProps<"/
               ["Diameter", s.diameterTolerance != null ? `1.75 ± ${s.diameterTolerance} mm` : null],
               ["Std. deviation", s.diameterSd != null ? `${s.diameterSd.toFixed(2)} µm` : null],
               ["Manufactured", s.manufactureDate ? formatDate(s.manufactureDate) : null],
+              ["List price", prices.length ? prices.map((p) => formatMoney(p.amount, p.currency)).join(" / ") : null],
             ]}
           />
         </CardContent>
@@ -126,6 +138,7 @@ export default async function PrusamentImportPage({ searchParams }: PageProps<"/
           <ImportForm
             url={url}
             currency={settings.currency}
+            listPrice={pickPrice(prices, settings.currency)}
             vendors={vendors.map((v) => v.name)}
             locations={locations}
             initialWeight={s.initialWeight}
