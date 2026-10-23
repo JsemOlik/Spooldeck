@@ -207,19 +207,19 @@ export function LabelDesigner({
                 />
               )}
             </div>
-            <Button asChild={labelCount > 0} disabled={labelCount === 0} size="lg">
-              {labelCount > 0 ? (
+            {labelCount > 0 ? (
+              <Button asChild size="lg">
                 <a href={printHref} target="_blank" rel="noopener">
                   <PrinterIcon />
                   Print {labelCount} label{labelCount === 1 ? "" : "s"}
                 </a>
-              ) : (
-                <span>
-                  <PrinterIcon />
-                  Select spools to print
-                </span>
-              )}
-            </Button>
+              </Button>
+            ) : (
+              <Button size="lg" disabled>
+                <PrinterIcon />
+                Select spools to print
+              </Button>
+            )}
             {labelCount > 0 && (
               <p className="text-muted-foreground text-xs">
                 {pageCount} page{pageCount === 1 ? "" : "s"}. In the print dialog set margins to <b>None</b> and scale to{" "}
