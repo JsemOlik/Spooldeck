@@ -28,6 +28,12 @@ async function waitForDatabase() {
       return;
     } catch (err) {
       if (!process.env.DATABASE_URL) throw err;
+      if (err instanceof URIError) {
+        console.error(
+          "DATABASE_URL isn't a valid URL. Percent-encode special characters in the password, or leave the password out of the URL and set PGPASSWORD instead.",
+        );
+        throw err;
+      }
       const cause = ((err as { cause?: unknown }).cause ?? err) as { code?: string; message?: string };
       const reason = [cause.code, cause.message].filter(Boolean).join(": ");
       if (FATAL_CODES.has(cause.code ?? "")) {
