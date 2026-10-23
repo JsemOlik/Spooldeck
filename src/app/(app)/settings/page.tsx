@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { and, count, eq, gt } from "drizzle-orm";
+import { AboutCredits } from "@/components/credits";
 import { PageHeader } from "@/components/page-header";
 import { CatalogEditor, type CatalogField, LocationsEditor } from "@/components/settings/catalog-editor";
 import {
@@ -168,6 +169,15 @@ export default async function SettingsPage() {
             </CardHeader>
             <CardContent>
               <BackupCard />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AboutCredits />
             </CardContent>
           </Card>
         </div>

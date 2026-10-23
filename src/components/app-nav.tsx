@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { logoutAction } from "@/actions/auth";
+import { SidebarCredits } from "@/components/credits";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -76,7 +77,10 @@ export function Sidebar({ username }: { username: string }) {
           </Link>
         ))}
       </nav>
-      <div className="mt-auto flex items-center gap-1 border-t p-2">
+      <div className="mt-auto">
+        <SidebarCredits />
+      </div>
+      <div className="flex items-center gap-1 border-t p-2">
         <span className="text-muted-foreground min-w-0 flex-1 truncate px-2 text-sm">{username}</span>
         <ThemeToggle />
         <form action={logoutAction}>
