@@ -57,17 +57,6 @@ Compose runs Spooldeck next to a PostgreSQL 17 container. The database isn't pub
 
 To use a Postgres server you already run, drop the `postgres` service from the compose file and point `DATABASE_URL` at it.
 
-### Upgrading from the SQLite version
-
-Spooldeck used to store everything in a SQLite file. To bring that data over, including your login, import it into the new, still-empty Postgres database:
-
-```bash
-docker compose up -d --build
-docker compose run --rm -v spooldeck_spooldeck-data:/old-data spooldeck bun import-sqlite.js /old-data/spooldeck.db
-```
-
-`spooldeck_spooldeck-data` is the old volume; `docker volume ls` shows its exact name. The import refuses to run if the database already has an account or filaments. Once you've checked everything is there, you can remove the old volume.
-
 ## HTTPS and the camera
 
 Browsers only allow live camera scanning on **HTTPS** or `localhost`. On plain HTTP over your LAN, Spooldeck still works:
@@ -84,11 +73,11 @@ spools.example.com {
 }
 ```
 
+Then set `PUBLIC_URL=https://spools.example.com` so printed labels point at the HTTPS address.
+
 Spooldeck relies on the `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Forwarded-For` headers, which Caddy sets by default. They decide secure cookies, the address in QR codes and login rate limiting, so don't publish port 3000 next to the proxy: anyone reaching the app directly could forge them.
 
 No reverse proxy? Uncomment the `ports` block in `docker-compose.yml` and remove the `proxy` network from the `spooldeck` service and the `networks` section.
-
-Then set `PUBLIC_URL=https://spools.example.com` so printed labels point at the HTTPS address.
 
 ## Security
 
@@ -97,7 +86,7 @@ Spooldeck is meant for one person, but it's built to survive being exposed to th
 - **Account and passwords:** first-run setup is gated by a setup code from the server logs. Passwords are hashed with scrypt.
 - **Sessions:** random 256-bit tokens, stored hashed. The cookie is `httpOnly`, `SameSite=Lax`, and `Secure` behind HTTPS. Sessions slide over 30 days.
 - **Rate limiting:** failed logins back off exponentially per IP, with a global limit on top.
-- **Access checks:** every page, Server Action and API route checks the session server-side.
+- **Access checks:** every page, Server Action and API route (except the `/api/health` check) verifies the session server-side.
 - **Prusament lookups:** only `prusament.com` URLs are fetched, which prevents SSRF.
 - **Search engines:** pages are `noindex`. Framing and camera use from other origins are blocked.
 
@@ -153,7 +142,7 @@ bun run typecheck
 bun run build        # standalone production build
 ```
 
-After changing `src/db/schema.ts`, run `bun run db:generate` to create a migration in `drizzle/`. To move data from an old SQLite file, run `bun run import-sqlite ./data/spooldeck.db`.
+After changing `src/db/schema.ts`, run `bun run db:generate` to create a migration in `drizzle/`.
 
 ## Contributing
 
