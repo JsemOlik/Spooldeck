@@ -1,0 +1,17 @@
+services:
+  spooldeck:
+    build: .
+    image: spooldeck:latest
+    container_name: spooldeck
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # The address you open Spooldeck at; encoded into label QR codes.
+      # Can also be set later under Settings.
+      PUBLIC_URL: ${PUBLIC_URL:-}
+    volumes:
+      - spooldeck-data:/data
+
+volumes:
+  spooldeck-data:
