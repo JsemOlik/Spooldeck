@@ -7,7 +7,7 @@ A self-hosted filament tracker for 3D printing. It runs as a single-user app wit
 - **Log usage per print**, or weigh the spool and enter the scale reading. Remaining weight, estimated length and cost per print are calculated from that.
 - **Keep the details:** brand, material, color, temps, drying settings, price, where you bought it and storage location, plus dated notes like "strings above 230 °C" for the next time you use the same filament.
 
-Built with Next.js 16, bun, SQLite (Drizzle ORM) and Tailwind/shadcn.
+Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
 
 ## Quick start (Docker)
 
@@ -18,13 +18,28 @@ docker compose logs spooldeck
 
 The logs print a **one-time setup code**. Open `http://<host>:3000/setup`, enter the code and create your account. The code means a stranger can't claim a fresh instance that happens to be reachable before you set it up.
 
-Data lives in the `spooldeck-data` volume (`/data/spooldeck.db`). Migrations run automatically on start.
+Compose runs Spooldeck next to a PostgreSQL 17 container. The database isn't published on the host, and its data lives in the `spooldeck-postgres` volume. Migrations run automatically on start. Set `POSTGRES_PASSWORD` in a `.env` file next to `docker-compose.yml` before the first start.
 
-| Variable       | Default                    | Purpose                                                                                                 |
-| -------------- | -------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `PUBLIC_URL`   | _(request host)_           | The URL encoded in label QR codes, e.g. `https://spools.example.com`. Can also be set under Settings. |
-| `DATABASE_URL` | `file:/data/spooldeck.db`  | SQLite file location.                                                                                   |
-| `PORT`         | `3000`                     | HTTP port.                                                                                              |
+| Variable            | Default            | Purpose                                                                                                 |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | _(required)_       | PostgreSQL connection string, e.g. `postgres://user:pass@host:5432/spooldeck`. Compose sets it.          |
+| `POSTGRES_PASSWORD` | `spooldeck`        | Password for the bundled Postgres container (compose only).                                             |
+| `PUBLIC_URL`        | _(request host)_   | The URL encoded in label QR codes, e.g. `https://spools.example.com`. Can also be set under Settings. |
+| `DATABASE_POOL_MAX` | `10`               | Database connections per app instance.                                                                  |
+| `PORT`              | `3000`             | HTTP port.                                                                                              |
+
+To use a Postgres server you already run, drop the `postgres` service from the compose file and point `DATABASE_URL` at it.
+
+### Upgrading from the SQLite version
+
+Spooldeck used to store everything in a SQLite file. To bring that data over, including your login, import it into the new, still-empty Postgres database:
+
+```bash
+docker compose up -d --build
+docker compose run --rm -v spooldeck_spooldeck-data:/old-data spooldeck bun import-sqlite.js /old-data/spooldeck.db
+```
+
+`spooldeck_spooldeck-data` is the old volume; `docker volume ls` shows its exact name. The import refuses to run if the database already has an account or filaments. Once you've checked everything is there, you can remove the old volume.
 
 ## HTTPS and the camera
 
@@ -76,17 +91,39 @@ Open **Labels** to design one:
 
 ## Backup
 
-**Settings → Backup** downloads a JSON file with everything except your login. Restoring a backup replaces all current data. You can also copy the SQLite file out of the volume while the app is stopped.
+**Settings → Backup** downloads a JSON file with everything except your login. Restoring a backup replaces all current data. For a full copy including your login, use `pg_dump`:
+
+```bash
+docker compose exec postgres pg_dump -U spooldeck spooldeck > spooldeck.sql
+```
 
 ## Development
+
+You need a PostgreSQL database. Either run one with Docker:
+
+```bash
+docker compose up -d postgres
+```
+
+and add `ports: ["5432:5432"]` to the `postgres` service so it's reachable from the host, or, without Docker, start an embedded one ([PGlite](https://pglite.dev)) that keeps its data in `./data/pglite`:
+
+```bash
+bun run db:dev
+```
+
+Copy `.env.example` to `.env.local` and set `DATABASE_URL`. With `db:dev` that's `postgres://postgres@localhost:5432/postgres` plus `DATABASE_POOL_MAX=1`, because PGlite can only serve one connection reliably. Then:
 
 ```bash
 bun install
 bun run dev          # http://localhost:3000; the setup code is printed in the terminal
-bun test             # unit tests
+bun test             # unit tests; they start their own in-memory Postgres
 bun run lint
 bun run typecheck
 bun run build        # standalone production build
 ```
 
-After changing `src/db/schema.ts`, run `bun run db:generate` to create a migration in `drizzle/`.
+After changing `src/db/schema.ts`, run `bun run db:generate` to create a migration in `drizzle/`. To move data from an old SQLite file, run `bun run import-sqlite ./data/spooldeck.db`.
+
+## License
+
+Spooldeck is free software under the [GNU General Public License v3.0](LICENSE).
