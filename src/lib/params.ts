@@ -12,3 +12,12 @@ export function oneOf<T extends string>(v: string | string[] | undefined, values
   const s = strParam(v);
   return s && (values as readonly string[]).includes(s) ? (s as T) : undefined;
 }
+
+/** Parses a comma-separated list of positive integer ids, keeping order and dropping duplicates. */
+export function idListParam(v: string | string[] | undefined, max = 500) {
+  const ids = (strParam(v) ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return [...new Set(ids)].slice(0, max);
+}

@@ -6,17 +6,15 @@ export type AppSettings = {
   currency: string;
   lowStockGrams: number;
   publicUrl: string;
-  defaultLabelTemplateId: number | null;
 };
 
 const DEFAULTS: AppSettings = {
   currency: "EUR",
   lowStockGrams: 150,
   publicUrl: "",
-  defaultLabelTemplateId: null,
 };
 
-const KEYS = ["currency", "lowStockGrams", "publicUrl", "defaultLabelTemplateId"] as const;
+const KEYS = ["currency", "lowStockGrams", "publicUrl"] as const;
 
 export async function getSetting(key: string): Promise<string | null> {
   const row = await db.query.settings.findFirst({ where: eq(settings.key, key) });
@@ -38,11 +36,9 @@ export async function getAppSettings(): Promise<AppSettings> {
   const rows = await db.select().from(settings).where(inArray(settings.key, [...KEYS]));
   const map = new Map(rows.map((r) => [r.key, r.value]));
   const lowStock = Number(map.get("lowStockGrams"));
-  const defaultTemplate = Number(map.get("defaultLabelTemplateId"));
   return {
     currency: map.get("currency") || DEFAULTS.currency,
     lowStockGrams: Number.isFinite(lowStock) && map.has("lowStockGrams") ? lowStock : DEFAULTS.lowStockGrams,
     publicUrl: map.get("publicUrl") || process.env.PUBLIC_URL || DEFAULTS.publicUrl,
-    defaultLabelTemplateId: Number.isInteger(defaultTemplate) && defaultTemplate > 0 ? defaultTemplate : null,
   };
 }
