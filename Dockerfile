@@ -13,9 +13,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN bun run build
-# Self-contained maintenance tools (postgres.js is pure JS, so they bundle completely).
-RUN bun build scripts/reset-password.ts --target=bun --outfile=reset-password.js \
- && bun build scripts/import-sqlite.ts --target=bun --outfile=import-sqlite.js
+# Self-contained maintenance tool (postgres.js is pure JS, so it bundles completely).
+RUN bun build scripts/reset-password.ts --target=bun --outfile=reset-password.js
 
 # ---- Runtime ----------------------------------------------------------------
 FROM oven/bun:1-slim AS runtime
@@ -29,7 +28,7 @@ COPY --from=build --chown=bun:bun /app/.next/standalone ./
 COPY --from=build --chown=bun:bun /app/.next/static ./.next/static
 COPY --from=build --chown=bun:bun /app/public ./public
 COPY --from=build --chown=bun:bun /app/drizzle ./drizzle
-COPY --from=build --chown=bun:bun /app/reset-password.js /app/import-sqlite.js ./
+COPY --from=build --chown=bun:bun /app/reset-password.js ./
 
 USER bun
 EXPOSE 3000

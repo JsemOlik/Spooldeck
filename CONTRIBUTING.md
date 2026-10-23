@@ -53,7 +53,7 @@ Live camera scanning needs HTTPS or `localhost`. To try it on your phone, expose
 | `src/lib/auth/`      | Password hashing, sessions and `requireUser()`.                                |
 | `src/components/ui/` | shadcn/ui building blocks. Feature components sit in sibling folders.          |
 | `drizzle/`           | Generated SQL migrations, applied automatically on startup.                    |
-| `scripts/`           | `reset-password` and `import-sqlite`.                                          |
+| `scripts/`           | `reset-password`, which sets a new password when you are locked out.           |
 | `test/`              | `bun test` suites. They start their own in-memory Postgres (PGlite).           |
 
 ## Guidelines
@@ -86,7 +86,7 @@ The project uses [Conventional Commits](https://www.conventionalcommits.org). Lo
 ```
 feat(scan): toggle the flashlight while scanning
 fix(db): let scripts close the connection pool
-docs: document the PostgreSQL setup and SQLite upgrade
+docs: add a contributing guide
 ```
 
 Common types are `feat`, `fix`, `refactor`, `docs`, `test`, `build` and `chore`, with an optional scope like `spools`, `labels`, `scan`, `db`, `ui` or `docker`. Mark breaking changes with `!` (e.g. `refactor(db)!:`) and explain the upgrade path in the commit body.
