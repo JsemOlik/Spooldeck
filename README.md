@@ -1,4 +1,8 @@
-# Spooldeck
+<p align="center">
+  <img src="src/app/icon.svg" alt="Spooldeck logo" width="96" height="96" />
+</p>
+
+<h1 align="center">Spooldeck</h1>
 
 A self-hosted filament tracker for 3D printing. It runs as a single-user app with QR codes at its core:
 
