@@ -155,6 +155,10 @@ bun run build        # standalone production build
 
 After changing `src/db/schema.ts`, run `bun run db:generate` to create a migration in `drizzle/`. To move data from an old SQLite file, run `bun run import-sqlite ./data/spooldeck.db`.
 
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, conventions and what to check before opening a PR.
+
 ## License
 
 Spooldeck is free software under the [GNU General Public License v3.0](LICENSE).
