@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="src/app/icon.svg" alt="" width="48" height="48" align="center" />
+  <img src="src/app/icon.svg" alt="" width="72" height="72" align="center" />
   Spooldeck
 </h1>
 
