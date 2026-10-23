@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "spooldeck_session";
 const SESSION_TTL_S = 30 * 24 * 60 * 60;
-const PUBLIC_PATHS = ["/login", "/setup", "/api/health"];
+// /api/v1 authenticates with bearer tokens inside each route (src/lib/auth/api.ts).
+const PUBLIC_PATHS = ["/login", "/setup", "/api/health", "/api/v1"];
 
 /**
  * Optimistic check only: redirects visitors without a session cookie to /login.
