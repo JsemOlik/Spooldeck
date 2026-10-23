@@ -4,8 +4,13 @@ services:
     image: spooldeck:latest
     container_name: spooldeck
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # Reached by the reverse proxy over the shared "proxy" network as spooldeck:3000.
+    # To open it directly instead, publish the port:
+    # ports:
+    #   - "3000:3000"
+    networks:
+      - default
+      - proxy
     environment:
       DATABASE_URL: postgres://spooldeck:${POSTGRES_PASSWORD:-spooldeck}@postgres:5432/spooldeck
       # The address you open Spooldeck at; encoded into label QR codes.
@@ -34,3 +39,8 @@ services:
 
 volumes:
   spooldeck-postgres:
+
+networks:
+  # Shared with the reverse proxy container. Create it once: docker network create proxy
+  proxy:
+    external: true
