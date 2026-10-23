@@ -87,6 +87,7 @@ Spooldeck is meant for one person, but it's built to survive being exposed to th
 - **Sessions:** random 256-bit tokens, stored hashed. The cookie is `httpOnly`, `SameSite=Lax`, and `Secure` behind HTTPS. Sessions slide over 30 days.
 - **Rate limiting:** failed logins back off exponentially per IP, with a global limit on top.
 - **Access checks:** every page, Server Action and API route (except the `/api/health` check) verifies the session server-side.
+- **API tokens:** the JSON API under `/api/v1` (used by the iOS app) takes `Authorization: Bearer <token>`. Tokens come from `POST /api/v1/auth/login`, are ordinary sessions, and are revoked by "Sign out everywhere" and password changes. See [docs/api.md](docs/api.md).
 - **Prusament lookups:** only `prusament.com` URLs are fetched, which prevents SSRF.
 - **Search engines:** pages are `noindex`. Framing and camera use from other origins are blocked.
 
