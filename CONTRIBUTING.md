@@ -14,7 +14,7 @@ Open an [issue](https://github.com/jsemolik/spooldeck/issues) and include:
 
 Leave out anything private: your `DATABASE_URL`, passwords, the setup code and session cookies.
 
-**Security issues:** please don't open a public issue. Email [hello@jsemolik.dev](mailto:hello@jsemolik.dev) with a description and steps to reproduce, and give a chance to release a fix before sharing details publicly.
+**Security issues:** please don't open a public issue. Email [hello@jsemolik.dev](mailto:hello@jsemolik.dev) with a description and steps to reproduce, and please allow time for a fix to be released before sharing details publicly.
 
 ## Development setup
 
