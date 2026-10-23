@@ -101,7 +101,7 @@ CREATE TABLE `spools` (
 	`purchase_url` text,
 	`manufacture_date` text,
 	`length_m` real,
-	`diameter_avg` real,
+	`diameter_tolerance` real,
 	`diameter_sd` real,
 	`ovality` real,
 	`prusament_raw` text,

@@ -2,16 +2,17 @@
 
 import { useActionState } from "react";
 import { setupAction } from "@/actions/auth";
+import { ActionForm } from "@/components/forms/action-form";
 import { Field, FormError } from "@/components/forms/field";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Input } from "@/components/ui/input";
 import { initialActionState } from "@/lib/action-state";
 
 export function SetupForm() {
-  const [state, action] = useActionState(setupAction, initialActionState);
+  const [state, action, pending] = useActionState(setupAction, initialActionState);
   const fe = state.fieldErrors;
   return (
-    <form action={action} className="grid gap-4">
+    <ActionForm action={action} pending={pending} className="grid gap-4">
       <FormError message={state.error} />
       <Field
         label="Setup code"
@@ -31,6 +32,6 @@ export function SetupForm() {
         <Input id="confirm" name="confirm" type="password" autoComplete="new-password" required />
       </Field>
       <SubmitButton size="lg">Create account</SubmitButton>
-    </form>
+    </ActionForm>
   );
 }

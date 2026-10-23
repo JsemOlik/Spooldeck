@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e7dda3a4-624e-4944-b841-461360998c9b",
+  "id": "3f5933d1-df4b-4688-a528-c0745c40b75a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "brands": {
@@ -695,8 +695,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "diameter_avg": {
-          "name": "diameter_avg",
+        "diameter_tolerance": {
+          "name": "diameter_tolerance",
           "type": "real",
           "primaryKey": false,
           "notNull": false,

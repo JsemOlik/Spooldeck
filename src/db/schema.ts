@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const createdAt = () =>
@@ -131,7 +131,7 @@ export const spools = sqliteTable(
     purchaseUrl: text("purchase_url"),
     manufactureDate: text("manufacture_date"),
     lengthM: real("length_m"),
-    diameterAvg: real("diameter_avg"),
+    diameterTolerance: real("diameter_tolerance"),
     diameterSd: real("diameter_sd"),
     ovality: real("ovality"),
     prusamentRaw: text("prusament_raw"),
@@ -208,3 +208,34 @@ export type Spool = typeof spools.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
 export type FilamentNote = typeof filamentNotes.$inferSelect;
 export type LabelTemplate = typeof labelTemplates.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Relations
+// ---------------------------------------------------------------------------
+
+export const usersRelations = relations(users, ({ many }) => ({ sessions: many(sessions) }));
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
+}));
+export const brandsRelations = relations(brands, ({ many }) => ({ filaments: many(filaments) }));
+export const materialsRelations = relations(materials, ({ many }) => ({ filaments: many(filaments) }));
+export const vendorsRelations = relations(vendors, ({ many }) => ({ spools: many(spools) }));
+export const filamentsRelations = relations(filaments, ({ one, many }) => ({
+  brand: one(brands, { fields: [filaments.brandId], references: [brands.id] }),
+  material: one(materials, { fields: [filaments.materialId], references: [materials.id] }),
+  spools: many(spools),
+  notes: many(filamentNotes),
+}));
+export const spoolsRelations = relations(spools, ({ one, many }) => ({
+  filament: one(filaments, { fields: [spools.filamentId], references: [filaments.id] }),
+  vendor: one(vendors, { fields: [spools.vendorId], references: [vendors.id] }),
+  usage: many(usageLogs),
+  notes: many(filamentNotes),
+}));
+export const usageLogsRelations = relations(usageLogs, ({ one }) => ({
+  spool: one(spools, { fields: [usageLogs.spoolId], references: [spools.id] }),
+}));
+export const filamentNotesRelations = relations(filamentNotes, ({ one }) => ({
+  filament: one(filaments, { fields: [filamentNotes.filamentId], references: [filaments.id] }),
+  spool: one(spools, { fields: [filamentNotes.spoolId], references: [spools.id] }),
+}));
