@@ -26,7 +26,7 @@ const passwordSchema = z
   .max(256);
 
 async function hasUser() {
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);
+  const [{ count }] = await db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(users);
   return count > 0;
 }
 
@@ -74,7 +74,7 @@ export async function setupAction(_prev: ActionState, formData: FormData): Promi
 
   const passwordHash = await hashPassword(parsed.data.password);
   const created = await db.transaction(async (tx) => {
-    const [{ count }] = await tx.select({ count: sql<number>`count(*)` }).from(users);
+    const [{ count }] = await tx.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(users);
     if (count > 0) return null;
     const [user] = await tx
       .insert(users)

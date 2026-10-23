@@ -1,30 +1,32 @@
-import { relations, sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-const createdAt = () =>
-  integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`);
+const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+
+// By-default identity, so restoring a backup can insert its own ids.
+const id = () => integer("id").primaryKey().generatedByDefaultAsIdentity();
+
+const createdAt = () => ts("created_at").notNull().defaultNow();
 
 const updatedAt = () =>
-  integer("updated_at", { mode: "timestamp_ms" })
+  ts("updated_at")
     .notNull()
-    .default(sql`(unixepoch() * 1000)`)
+    .defaultNow()
     .$onUpdate(() => new Date());
 
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
-export const users = sqliteTable("users", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const users = pgTable("users", {
+  id: id(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
 
-export const sessions = sqliteTable(
+export const sessions = pgTable(
   "sessions",
   {
     // SHA-256 hex of the cookie token; the raw token is never stored.
@@ -32,14 +34,14 @@ export const sessions = sqliteTable(
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: ts("expires_at").notNull(),
     userAgent: text("user_agent"),
     createdAt: createdAt(),
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
 );
 
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
@@ -48,25 +50,25 @@ export const settings = sqliteTable("settings", {
 // Catalog
 // ---------------------------------------------------------------------------
 
-export const brands = sqliteTable("brands", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const brands = pgTable("brands", {
+  id: id(),
   name: text("name").notNull().unique(),
   website: text("website"),
   createdAt: createdAt(),
 });
 
-export const vendors = sqliteTable("vendors", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const vendors = pgTable("vendors", {
+  id: id(),
   name: text("name").notNull().unique(),
   url: text("url"),
   notes: text("notes"),
   createdAt: createdAt(),
 });
 
-export const materials = sqliteTable("materials", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const materials = pgTable("materials", {
+  id: id(),
   name: text("name").notNull().unique(),
-  density: real("density").notNull().default(1.24),
+  density: doublePrecision("density").notNull().default(1.24),
   nozzleMin: integer("nozzle_min"),
   nozzleMax: integer("nozzle_max"),
   bedMin: integer("bed_min"),
@@ -75,16 +77,16 @@ export const materials = sqliteTable("materials", {
   createdAt: createdAt(),
 });
 
-export const filaments = sqliteTable(
+export const filaments = pgTable(
   "filaments",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: id(),
     brandId: integer("brand_id").references(() => brands.id, { onDelete: "set null" }),
     materialId: integer("material_id").references(() => materials.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     colorName: text("color_name"),
     colorHex: text("color_hex"),
-    diameter: real("diameter").notNull().default(1.75),
+    diameter: doublePrecision("diameter").notNull().default(1.75),
     nominalWeight: integer("nominal_weight").notNull().default(1000),
     spoolWeight: integer("spool_weight"),
     nozzleMin: integer("nozzle_min"),
@@ -92,14 +94,14 @@ export const filaments = sqliteTable(
     bedMin: integer("bed_min"),
     bedMax: integer("bed_max"),
     dryingTemp: integer("drying_temp"),
-    dryingHours: real("drying_hours"),
+    dryingHours: doublePrecision("drying_hours"),
     maxSpeed: integer("max_speed"),
     fan: text("fan"),
     productUrl: text("product_url"),
     imageUrl: text("image_url"),
     prusamentGoodsId: integer("prusament_goods_id"),
     rating: integer("rating"),
-    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+    archived: boolean("archived").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -113,10 +115,10 @@ export const filaments = sqliteTable(
 export const SPOOL_STATUSES = ["sealed", "opened", "empty", "archived"] as const;
 export type SpoolStatus = (typeof SPOOL_STATUSES)[number];
 
-export const spools = sqliteTable(
+export const spools = pgTable(
   "spools",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: id(),
     filamentId: integer("filament_id")
       .notNull()
       .references(() => filaments.id, { onDelete: "restrict" }),
@@ -124,20 +126,20 @@ export const spools = sqliteTable(
     prusamentSpoolId: text("prusament_spool_id"),
     initialWeight: integer("initial_weight").notNull(),
     spoolWeight: integer("spool_weight"),
-    price: real("price"),
+    price: doublePrecision("price"),
     currency: text("currency"),
     vendorId: integer("vendor_id").references(() => vendors.id, { onDelete: "set null" }),
     purchaseDate: text("purchase_date"),
     purchaseUrl: text("purchase_url"),
     manufactureDate: text("manufacture_date"),
-    lengthM: real("length_m"),
-    diameterTolerance: real("diameter_tolerance"),
-    diameterSd: real("diameter_sd"),
-    ovality: real("ovality"),
+    lengthM: doublePrecision("length_m"),
+    diameterTolerance: doublePrecision("diameter_tolerance"),
+    diameterSd: doublePrecision("diameter_sd"),
+    ovality: doublePrecision("ovality"),
     prusamentRaw: text("prusament_raw"),
     location: text("location"),
     status: text("status", { enum: SPOOL_STATUSES }).notNull().default("sealed"),
-    openedAt: integer("opened_at", { mode: "timestamp_ms" }),
+    openedAt: ts("opened_at"),
     notes: text("notes"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -152,15 +154,15 @@ export const spools = sqliteTable(
 export const USAGE_KINDS = ["print", "adjustment", "weigh_in"] as const;
 export type UsageKind = (typeof USAGE_KINDS)[number];
 
-export const usageLogs = sqliteTable(
+export const usageLogs = pgTable(
   "usage_logs",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: id(),
     spoolId: integer("spool_id")
       .notNull()
       .references(() => spools.id, { onDelete: "cascade" }),
     // Grams removed from the spool. Negative values add weight back (corrections).
-    grams: real("grams").notNull(),
+    grams: doublePrecision("grams").notNull(),
     kind: text("kind", { enum: USAGE_KINDS }).notNull().default("print"),
     printName: text("print_name"),
     note: text("note"),
@@ -169,10 +171,10 @@ export const usageLogs = sqliteTable(
   (t) => [index("usage_spool_idx").on(t.spoolId), index("usage_created_idx").on(t.createdAt)],
 );
 
-export const filamentNotes = sqliteTable(
+export const filamentNotes = pgTable(
   "filament_notes",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: id(),
     filamentId: integer("filament_id")
       .notNull()
       .references(() => filaments.id, { onDelete: "cascade" }),
@@ -187,14 +189,14 @@ export const filamentNotes = sqliteTable(
 // Labels
 // ---------------------------------------------------------------------------
 
-export const labelTemplates = sqliteTable("label_templates", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const labelTemplates = pgTable("label_templates", {
+  id: id(),
   name: text("name").notNull(),
-  widthMm: real("width_mm").notNull(),
-  heightMm: real("height_mm").notNull(),
-  layout: text("layout", { mode: "json" }).notNull(),
-  sheet: text("sheet", { mode: "json" }),
-  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  widthMm: doublePrecision("width_mm").notNull(),
+  heightMm: doublePrecision("height_mm").notNull(),
+  layout: jsonb("layout").notNull(),
+  sheet: jsonb("sheet"),
+  isDefault: boolean("is_default").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

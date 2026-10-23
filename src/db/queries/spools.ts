@@ -1,18 +1,20 @@
 import { and, asc, count, desc, eq, inArray, ne, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { brands, filaments, materials, spools, usageLogs, vendors, type SpoolStatus } from "@/db/schema";
 
-const usage = db
+// Built without `db` so importing this module never needs a database connection (e.g. during `next build`).
+const usage = new QueryBuilder()
   .select({
     spoolId: usageLogs.spoolId,
-    used: sql<number>`coalesce(sum(${usageLogs.grams}), 0)`.as("used"),
-    lastUsedAt: sql<number | null>`max(case when ${usageLogs.kind} = 'print' then ${usageLogs.createdAt} end)`.as("last_used_at"),
+    used: sql<number>`coalesce(sum(${usageLogs.grams}), 0)`.mapWith(Number).as("used"),
+    lastUsedAt: sql<Date | null>`max(case when ${usageLogs.kind} = 'print' then ${usageLogs.createdAt} end)`.mapWith(usageLogs.createdAt).as("last_used_at"),
   })
   .from(usageLogs)
   .groupBy(usageLogs.spoolId)
   .as("u");
 
-const remainingExpr = sql<number>`(${spools.initialWeight} - coalesce(${usage.used}, 0))`;
+const remainingExpr = sql<number>`(${spools.initialWeight} - coalesce(${usage.used}, 0))`.mapWith(Number);
 
 const spoolRowSelect = {
   id: spools.id,
@@ -26,7 +28,7 @@ const spoolRowSelect = {
   purchaseDate: spools.purchaseDate,
   prusamentSpoolId: spools.prusamentSpoolId,
   createdAt: spools.createdAt,
-  used: sql<number>`coalesce(${usage.used}, 0)`,
+  used: sql<number>`coalesce(${usage.used}, 0)`.mapWith(Number),
   remaining: remainingExpr,
   lastUsedAt: usage.lastUsedAt,
   filamentId: filaments.id,
@@ -76,7 +78,7 @@ export async function listSpools(filters: SpoolFilters = {}): Promise<SpoolRow[]
   if (filters.lowStockGrams != null) where.push(sql`${remainingExpr} <= ${filters.lowStockGrams}`);
   if (filters.q) {
     const term = `%${filters.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    const likeEsc = (col: SQLWrapper) => sql`${col} like ${term} escape '\\'`;
+    const likeEsc = (col: SQLWrapper) => sql`${col} ilike ${term} escape '\\'`;
     where.push(
       or(
         likeEsc(filaments.name),
@@ -134,7 +136,7 @@ export async function getSpoolIdByPrusamentId(prusamentSpoolId: string) {
 
 export async function getSpoolUsed(spoolId: number) {
   const [row] = await db
-    .select({ used: sql<number>`coalesce(sum(${usageLogs.grams}), 0)` })
+    .select({ used: sql<number>`coalesce(sum(${usageLogs.grams}), 0)`.mapWith(Number) })
     .from(usageLogs)
     .where(eq(usageLogs.spoolId, spoolId));
   return row?.used ?? 0;

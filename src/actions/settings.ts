@@ -4,7 +4,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
 import { db } from "@/db";
-import { brands, filaments, materials, spools, vendors } from "@/db/schema";
+import { brands, materials, spools, vendors } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
 import { type ActionState, formToObject, fromZodError } from "@/lib/action-state";
 import { deleteSetting, setSetting } from "@/lib/settings";
@@ -60,14 +60,9 @@ export async function saveCatalogItemAction(
 
 export async function deleteCatalogItemAction(kind: CatalogKind, id: number) {
   await requireUser();
-  await db.transaction(async (tx) => {
-    // Foreign keys aren't enforced by SQLite here, so detach references by hand.
-    if (kind === "brands") await tx.update(filaments).set({ brandId: null }).where(eq(filaments.brandId, id));
-    if (kind === "materials") await tx.update(filaments).set({ materialId: null }).where(eq(filaments.materialId, id));
-    if (kind === "vendors") await tx.update(spools).set({ vendorId: null }).where(eq(spools.vendorId, id));
-    const { table } = CATALOG[kind];
-    await tx.delete(table).where(eq(table.id, id));
-  });
+  // The foreign keys are ON DELETE SET NULL, so filaments and spools just lose the reference.
+  const { table } = CATALOG[kind];
+  await db.delete(table).where(eq(table.id, id));
   revalidatePath("/", "layout");
 }
 

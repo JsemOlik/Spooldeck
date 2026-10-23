@@ -11,18 +11,27 @@ export async function listFilaments(filters: FilamentFilters = {}) {
   if (filters.q) {
     const term = `%${filters.q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
     where.push(
-      sql`(${filaments.name} like ${term} escape '\\' or ${filaments.colorName} like ${term} escape '\\' or ${brands.name} like ${term} escape '\\' or ${materials.name} like ${term} escape '\\')`,
+      sql`(${filaments.name} ilike ${term} escape '\\' or ${filaments.colorName} ilike ${term} escape '\\' or ${brands.name} ilike ${term} escape '\\' or ${materials.name} ilike ${term} escape '\\')`,
     );
   }
+
+  // A join rather than a correlated subquery: drizzle leaves column names unqualified in
+  // single-table selects, which made the subquery compare usage_logs with itself.
+  const used = db
+    .select({ spoolId: usageLogs.spoolId, grams: sql<number>`sum(${usageLogs.grams})`.as("grams") })
+    .from(usageLogs)
+    .groupBy(usageLogs.spoolId)
+    .as("used");
 
   const stock = db
     .select({
       filamentId: spools.filamentId,
-      spoolCount: sql<number>`count(*)`.as("spool_count"),
-      activeCount: sql<number>`sum(case when ${spools.status} in ('sealed','opened') then 1 else 0 end)`.as("active_count"),
-      remaining: sql<number>`sum(case when ${spools.status} in ('sealed','opened') then ${spools.initialWeight} - coalesce((select sum(${usageLogs.grams}) from ${usageLogs} where ${usageLogs.spoolId} = ${spools.id}), 0) else 0 end)`.as("remaining"),
+      spoolCount: sql<number>`count(*)`.mapWith(Number).as("spool_count"),
+      activeCount: sql<number>`sum(case when ${spools.status} in ('sealed','opened') then 1 else 0 end)`.mapWith(Number).as("active_count"),
+      remaining: sql<number>`sum(case when ${spools.status} in ('sealed','opened') then ${spools.initialWeight} - coalesce(${used.grams}, 0) else 0 end)`.mapWith(Number).as("remaining"),
     })
     .from(spools)
+    .leftJoin(used, eq(used.spoolId, spools.id))
     .groupBy(spools.filamentId)
     .as("stock");
 
@@ -41,9 +50,9 @@ export async function listFilaments(filters: FilamentFilters = {}) {
       imageUrl: filaments.imageUrl,
       brandName: brands.name,
       materialName: materials.name,
-      spoolCount: sql<number>`coalesce(${stock.spoolCount}, 0)`,
-      activeCount: sql<number>`coalesce(${stock.activeCount}, 0)`,
-      remaining: sql<number>`coalesce(${stock.remaining}, 0)`,
+      spoolCount: sql<number>`coalesce(${stock.spoolCount}, 0)`.mapWith(Number),
+      activeCount: sql<number>`coalesce(${stock.activeCount}, 0)`.mapWith(Number),
+      remaining: sql<number>`coalesce(${stock.remaining}, 0)`.mapWith(Number),
     })
     .from(filaments)
     .leftJoin(brands, eq(brands.id, filaments.brandId))

@@ -55,7 +55,7 @@ export async function setFilamentArchivedAction(id: number, archived: boolean) {
 export async function deleteFilamentAction(id: number): Promise<ActionState> {
   await requireUser();
   const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: sql<number>`count(*)`.mapWith(Number) })
     .from(spools)
     .where(eq(spools.filamentId, id));
   if (count > 0) return { error: "This filament still has spools. Delete or move them first, or archive it." };

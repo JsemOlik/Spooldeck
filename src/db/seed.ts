@@ -16,7 +16,7 @@ const DEFAULT_MATERIALS: (typeof materials.$inferInsert)[] = [
 ];
 
 export async function seedMaterials() {
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(materials);
+  const [{ count }] = await db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(materials);
   if (count > 0) return;
   await db.insert(materials).values(DEFAULT_MATERIALS).onConflictDoNothing();
 }

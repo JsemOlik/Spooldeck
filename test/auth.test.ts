@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";

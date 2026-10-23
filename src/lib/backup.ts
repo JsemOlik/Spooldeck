@@ -1,6 +1,5 @@
-import "server-only";
-import { getTableColumns, ne, type InferInsertModel } from "drizzle-orm";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { getTableColumns, getTableName, ne, sql, type InferInsertModel } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   brands,
@@ -27,7 +26,7 @@ const TABLES = {
   filamentNotes,
   labelTemplates,
   settings,
-} as const satisfies Record<string, SQLiteTable>;
+} as const satisfies Record<string, PgTable>;
 type TableName = keyof typeof TABLES;
 
 export type Backup = {
@@ -43,7 +42,7 @@ export async function exportBackup(): Promise<Backup> {
     data[name] =
       name === "settings"
         ? await db.select().from(settings).where(ne(settings.key, "setup_code"))
-        : await db.select().from(TABLES[name] as SQLiteTable);
+        : await db.select().from(TABLES[name] as PgTable);
   }
   return { app: "spooldeck", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), data } as Backup;
 }
@@ -54,7 +53,7 @@ export class BackupError extends Error {}
 function coerceRows(name: TableName, rows: unknown): Record<string, unknown>[] {
   if (rows === undefined) return [];
   if (!Array.isArray(rows)) throw new BackupError(`“${name}” must be a list`);
-  const columns = getTableColumns(TABLES[name] as SQLiteTable);
+  const columns = getTableColumns(TABLES[name] as PgTable);
   return rows.map((row, i) => {
     if (!row || typeof row !== "object") throw new BackupError(`${name}[${i}] is not an object`);
     const out: Record<string, unknown> = {};
@@ -112,21 +111,44 @@ export function parseBackup(json: unknown) {
   return parsed;
 }
 
+/** The Postgres error behind a failed query, if there is one (drizzle wraps it). */
+function pgError(err: unknown): { code?: string; detail?: string; table_name?: string } | null {
+  for (let e = err; e && typeof e === "object"; e = (e as { cause?: unknown }).cause) {
+    if ("code" in e && typeof e.code === "string") return e as never;
+  }
+  return null;
+}
+
 /** Replaces all inventory data with the backup's contents in one transaction. Returns row counts. */
 export async function restoreBackup(json: unknown) {
   const data = parseBackup(json);
   const names = Object.keys(TABLES) as TableName[];
-  await db.transaction(async (tx) => {
-    for (const name of [...names].reverse()) {
-      if (name === "settings") await tx.delete(settings).where(ne(settings.key, "setup_code"));
-      else await tx.delete(TABLES[name] as SQLiteTable);
-    }
-    for (const name of names) {
-      const rows = data[name];
-      for (let i = 0; i < rows.length; i += 200) {
-        await tx.insert(TABLES[name] as SQLiteTable).values(rows.slice(i, i + 200) as never);
+  try {
+    await db.transaction(async (tx) => {
+      for (const name of [...names].reverse()) {
+        if (name === "settings") await tx.delete(settings).where(ne(settings.key, "setup_code"));
+        else await tx.delete(TABLES[name] as PgTable);
       }
+      for (const name of names) {
+        const rows = data[name];
+        for (let i = 0; i < rows.length; i += 200) {
+          await tx.insert(TABLES[name] as PgTable).values(rows.slice(i, i + 200) as never);
+        }
+        // Rows keep their ids, so move the id sequence past them for the next insert.
+        if (name !== "settings") {
+          const table = getTableName(TABLES[name]);
+          await tx.execute(
+            sql`select setval(pg_get_serial_sequence(${table}, 'id'), coalesce((select max(id) from ${sql.identifier(table)}), 0) + 1, false)`,
+          );
+        }
+      }
+    });
+  } catch (err) {
+    const pg = pgError(err);
+    if (pg?.code === "23503" || pg?.code === "23505") {
+      throw new BackupError(`The backup's data doesn't fit together (${pg.table_name ?? "unknown table"}): ${pg.detail ?? "constraint failed"}`);
     }
-  });
+    throw err;
+  }
   return Object.fromEntries(names.map((n) => [n, data[n].length])) as Record<TableName, number>;
 }

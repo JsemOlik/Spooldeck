@@ -9,7 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "../src/db";
 import { sessions, settings, users } from "../src/db/schema";
 import { hashPassword } from "../src/lib/auth/password";
@@ -38,3 +38,4 @@ if (existing) {
 }
 
 console.log(`${summary}\nNew password: ${password}\nChange it under Settings after logging in.`);
+await db.$client.end();

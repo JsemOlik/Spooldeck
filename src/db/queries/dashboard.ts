@@ -33,7 +33,7 @@ export async function getDashboard(lowStockGrams: number, currency: string) {
     db
       .select({
         material: sql<string>`coalesce(${materials.name}, 'Other')`,
-        grams: sql<number>`sum(${usageLogs.grams})`,
+        grams: sql<number>`sum(${usageLogs.grams})`.mapWith(Number),
       })
       .from(usageLogs)
       .innerJoin(spools, eq(spools.id, usageLogs.spoolId))
@@ -44,8 +44,8 @@ export async function getDashboard(lowStockGrams: number, currency: string) {
       .orderBy(desc(sql`sum(${usageLogs.grams})`)),
     db
       .select({
-        prints30: sql<number>`count(*)`,
-        used30: sql<number>`coalesce(sum(${usageLogs.grams}), 0)`,
+        prints30: sql<number>`count(*)`.mapWith(Number),
+        used30: sql<number>`coalesce(sum(${usageLogs.grams}), 0)`.mapWith(Number),
       })
       .from(usageLogs)
       .where(and(eq(usageLogs.kind, "print"), gte(usageLogs.createdAt, since))),

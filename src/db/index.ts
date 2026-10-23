@@ -1,23 +1,35 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { createClient, type Client } from "@libsql/client";
-import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-export const DATABASE_URL = process.env.DATABASE_URL ?? "file:./data/spooldeck.db";
-
-type Db = LibSQLDatabase<typeof schema> & { $client: Client };
+type Db = PostgresJsDatabase<typeof schema> & { $client: postgres.Sql };
 
 const globalForDb = globalThis as unknown as { __spooldeckDb?: Db };
 
 function createDb(): Db {
-  if (DATABASE_URL.startsWith("file:")) {
-    mkdirSync(dirname(DATABASE_URL.slice("file:".length)), { recursive: true });
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL is not set. Point it at your PostgreSQL database, e.g. postgres://user:pass@localhost:5432/spooldeck");
   }
-  const client = createClient({ url: DATABASE_URL });
+  const client = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 10, onnotice: () => {} });
   return drizzle(client, { schema });
 }
 
-export const db: Db = globalForDb.__spooldeckDb ?? (globalForDb.__spooldeckDb = createDb());
+// Reused across hot reloads in dev so each edit doesn't open a new pool.
+function getDb(): Db {
+  return (globalForDb.__spooldeckDb ??= createDb());
+}
+
+/**
+ * Created on first use rather than on import: `next build` loads route modules without a
+ * database, and a missing DATABASE_URL should only fail once something actually queries.
+ */
+export const db = new Proxy({} as Db, {
+  get(_, prop) {
+    const real = getDb();
+    const value = Reflect.get(real, prop, real);
+    return typeof value === "function" ? value.bind(real) : value;
+  },
+});
 
 export { schema };

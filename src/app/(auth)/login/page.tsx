@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
@@ -11,7 +12,8 @@ import { LoginForm } from "./login-form";
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);
+  await connection();
+  const [{ count }] = await db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(users);
   if (count === 0) redirect("/setup");
   const { next } = await searchParams;
   if (await getCurrentUser()) redirect(safeNext(next));

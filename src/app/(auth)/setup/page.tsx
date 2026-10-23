@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Setup" };
 export default async function SetupPage() {
   // Must run per request: whether an account exists is only known at runtime.
   await connection();
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);
+  const [{ count }] = await db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(users);
   if (count > 0) redirect("/login");
 
   return (
