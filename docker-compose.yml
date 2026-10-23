@@ -14,7 +14,9 @@ services:
     environment:
       # The container name rather than "postgres": other stacks on the shared proxy
       # network may have their own service called postgres.
-      DATABASE_URL: postgres://spooldeck:${POSTGRES_PASSWORD:-spooldeck}@spooldeck-postgres:5432/spooldeck
+      DATABASE_URL: postgres://spooldeck@spooldeck-postgres:5432/spooldeck
+      # Kept out of the URL so the password can contain any characters without encoding.
+      PGPASSWORD: ${POSTGRES_PASSWORD:-spooldeck}
       # The address you open Spooldeck at; encoded into label QR codes.
       # Can also be set later under Settings.
       PUBLIC_URL: ${PUBLIC_URL:-}

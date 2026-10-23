@@ -26,6 +26,7 @@ Compose runs Spooldeck next to a PostgreSQL 17 container. The database isn't pub
 | Variable            | Default            | Purpose                                                                                                 |
 | ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`      | _(required)_       | PostgreSQL connection string, e.g. `postgres://user:pass@host:5432/spooldeck`. Compose sets it.          |
+| `PGPASSWORD`        | _(none)_           | Database password, if you leave it out of `DATABASE_URL`. Saves percent-encoding special characters. Compose sets it. |
 | `POSTGRES_PASSWORD` | `spooldeck`        | Password for the bundled Postgres container (compose only).                                             |
 | `PUBLIC_URL`        | _(request host)_   | The URL encoded in label QR codes, e.g. `https://spools.example.com`. Can also be set under Settings. |
 | `DATABASE_POOL_MAX` | `10`               | Database connections per app instance.                                                                  |
