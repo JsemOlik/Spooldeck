@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import { CameraIcon, CameraOffIcon, ImageUpIcon, Loader2Icon, SwitchCameraIcon } from "lucide-react";
+import { CameraIcon, CameraOffIcon, FlashlightIcon, FlashlightOffIcon, ImageUpIcon, Loader2Icon, SwitchCameraIcon } from "lucide-react";
 import { resolveScanAction } from "@/actions/scan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,13 @@ function cameraSupported() {
   return window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
 }
 
+// `torch` isn't in TypeScript's DOM types yet; browsers that support it report it as a capability.
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
+
+function hasTorch(track: MediaStreamTrack | undefined) {
+  return !!(track?.getCapabilities?.() as TorchCapabilities | undefined)?.torch;
+}
+
 export function Scanner({ initialError }: { initialError?: string }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -34,6 +41,8 @@ export function Scanner({ initialError }: { initialError?: string }) {
   const [active, setActive] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceIndex, setDeviceIndex] = useState(-1);
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [unknownText, setUnknownText] = useState<string | null>(null);
   const [manual, setManual] = useState("");
@@ -47,6 +56,8 @@ export function Scanner({ initialError }: { initialError?: string }) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setActive(false);
+    setTorchAvailable(false);
+    setTorchOn(false);
   }, []);
 
   useEffect(() => stop, [stop]);
@@ -89,6 +100,7 @@ export function Scanner({ initialError }: { initialError?: string }) {
       video.srcObject = stream;
       await video.play();
       setActive(true);
+      setTorchAvailable(hasTorch(stream.getVideoTracks()[0]));
       const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
       setDevices(all);
       const detector = await getQrDetector();
@@ -115,6 +127,18 @@ export function Scanner({ initialError }: { initialError?: string }) {
             ? "No camera found. Use a photo or paste the link instead."
             : "Couldn't start the camera. Use a photo or paste the link instead.",
       );
+    }
+  }
+
+  async function toggleTorch() {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const on = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
+      setTorchOn(on);
+    } catch {
+      setTorchAvailable(false);
     }
   }
 
@@ -180,6 +204,12 @@ export function Scanner({ initialError }: { initialError?: string }) {
               >
                 <SwitchCameraIcon />
                 Switch
+              </Button>
+            )}
+            {torchAvailable && (
+              <Button variant={torchOn ? "default" : "secondary"} size="sm" aria-pressed={torchOn} onClick={toggleTorch}>
+                {torchOn ? <FlashlightIcon /> : <FlashlightOffIcon />}
+                Light
               </Button>
             )}
             <Button variant="secondary" size="sm" onClick={stop}>
