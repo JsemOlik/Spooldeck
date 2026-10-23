@@ -15,15 +15,31 @@ function generateSetupCode() {
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 }
 
+/** Errors that won't fix themselves by waiting: wrong password, missing database or role. */
+const FATAL_CODES = new Set(["28P01", "28000", "3D000"]);
+
 /** Postgres may still be starting (e.g. a fresh container); wait up to a minute before giving up. */
 async function waitForDatabase() {
+  let lastReason = "";
   for (let attempt = 1; ; attempt++) {
     try {
       await db.execute(sql`select 1`);
+      if (attempt > 1) console.log("Connected to the database.");
       return;
     } catch (err) {
-      if (attempt >= 30 || !process.env.DATABASE_URL) throw err;
-      if (attempt === 1) console.log("Waiting for the database…");
+      if (!process.env.DATABASE_URL) throw err;
+      const cause = ((err as { cause?: unknown }).cause ?? err) as { code?: string; message?: string };
+      const reason = [cause.code, cause.message].filter(Boolean).join(": ");
+      if (FATAL_CODES.has(cause.code ?? "")) {
+        console.error(`Can't connect to the database (${reason}). Check DATABASE_URL and the Postgres credentials.`);
+        throw err;
+      }
+      if (attempt >= 30) {
+        console.error(`Gave up waiting for the database (${reason}).`);
+        throw err;
+      }
+      if (reason !== lastReason) console.log(`Waiting for the database (${reason})…`);
+      lastReason = reason;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
