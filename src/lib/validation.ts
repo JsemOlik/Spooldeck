@@ -49,7 +49,7 @@ export const filamentSchema = z
 export type FilamentInput = z.infer<typeof filamentSchema>;
 
 export const spoolSchema = z.object({
-  filamentId: num().int().positive("Pick a filament"),
+  filamentId: z.coerce.number({ error: "Pick a filament" }).int().positive("Pick a filament"),
   initialWeight: num().int("Whole grams").min(1, "Must be above 0").max(100_000),
   spoolWeight: optInt(0, 10_000),
   price: optNum(0, 1_000_000),
