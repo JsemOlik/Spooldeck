@@ -33,9 +33,9 @@ export type SliceInfo = {
 
 export class SlicerParseError extends Error {}
 
-const ASCII_TAIL_BYTES = 1024 * 1024;
-const ASCII_HEAD_BYTES = 4096;
-const BGCODE_MAGIC = "GCDE";
+export const ASCII_TAIL_BYTES = 1024 * 1024;
+export const ASCII_HEAD_BYTES = 4096;
+export const BGCODE_MAGIC = "GCDE";
 
 export async function parseSlicedFile(file: Blob, fileName: string): Promise<SliceInfo> {
   const magic = new TextDecoder().decode(await file.slice(0, 4).arrayBuffer());
