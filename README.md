@@ -15,7 +15,7 @@ Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
 
 ## Screenshots
 
-![Dashboard with spools in stock, filament on hand, inventory value, a running-low list and recent prints](docs/screenshots/dashboard.png)
+![Dashboard with stock totals, printers and their live prints, a running-low list and recent prints](docs/screenshots/dashboard.png)
 
 <p>
   <img src="docs/screenshots/spools.png" alt="Spool list with color swatches, remaining weight bars, status and storage location" width="49%" />
@@ -25,12 +25,17 @@ Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
   <img src="docs/screenshots/filament.png" alt="Filament page with dated notes, print settings and every spool bought with its price per kg" width="49%" />
   <img src="docs/screenshots/labels.png" alt="Label designer with a QR label preview, size presets and spool selection" width="49%" />
 </p>
+<p>
+  <img src="docs/screenshots/printers.png" alt="Printers with their brand, model, motion and location, live print progress and the spool on each tool" width="49%" />
+  <img src="docs/screenshots/printer.png" alt="Printer page with its details, the running print on five tools, usage totals and a 30-day chart" width="49%" />
+</p>
 
 On a phone, the sidebar becomes a bottom bar with the scanner in the middle:
 
 <p>
   <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard on a phone" width="32%" />
   <img src="docs/screenshots/mobile-spool.png" alt="Spool page on a phone" width="32%" />
+  <img src="docs/screenshots/mobile-printer.png" alt="Printer page on a phone" width="32%" />
 </p>
 
 ## Quick start (Docker)
