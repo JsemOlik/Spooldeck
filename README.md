@@ -78,6 +78,8 @@ Then set `PUBLIC_URL=https://spools.example.com` so printed labels point at the 
 
 Spooldeck relies on the `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Forwarded-For` headers, which Caddy sets by default. They decide secure cookies, the address in QR codes and login rate limiting, so don't publish port 3000 next to the proxy: anyone reaching the app directly could forge them.
 
+Other proxies need to pass the original `Host` on. nginx doesn't by default: without `proxy_set_header Host $host;` the app sees the `proxy_pass` address (such as `0.0.0.0:3000`) and puts it in QR codes. Setting `PUBLIC_URL` avoids this either way.
+
 No reverse proxy? Uncomment the `ports` block in `docker-compose.yml` and remove the `proxy` network from the `spooldeck` service and the `networks` section.
 
 ## Security
