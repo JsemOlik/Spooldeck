@@ -71,31 +71,31 @@ function isDark(hex: string) {
 const BRAND_HEX = "#df5200";
 
 /**
- * Spooldeck's spool on a tile of the filament's colour (or a printer in Spooldeck's orange, on a printer's label),
- * for the middle of the QR code. The white margin keeps it apart from the modules around it; the
- * code's high error correction covers it.
+ * The middle of the QR code: on a spool's label, Spooldeck's spool on a tile of the filament's
+ * colour; on a printer's label, Spooldeck's own icon (src/app/icon.svg). The white margin keeps it
+ * apart from the modules around it; the code's high error correction covers it.
  */
 function QrLogo({ color, printer }: { color: string | null; printer?: boolean }) {
-  const tile = printer ? BRAND_HEX : (color ?? "#000000");
+  if (printer) {
+    return (
+      <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
+        <circle cx="16" cy="16" r="16" fill="#ffffff" />
+        <circle cx="16" cy="16" r="13.5" fill={BRAND_HEX} />
+        <circle cx="16" cy="16" r="8.55" fill="none" stroke="#ffffff" strokeWidth="2.16" strokeDasharray="2.88 2.07" />
+        <circle cx="16" cy="16" r="3.96" fill="#ffffff" />
+      </svg>
+    );
+  }
+  const tile = color ?? "#000000";
   // The spool is black on light colours and white on dark ones, the hub the opposite.
   const [spool, hub] = isDark(tile) ? ["#ffffff", "#000000"] : ["#000000", "#ffffff"];
   return (
     <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
       <rect width="32" height="32" rx="7" fill="#ffffff" />
       <rect x="2.5" y="2.5" width="27" height="27" rx="5.5" fill={tile} />
-      {printer ? (
-        <g fill="none" stroke={spool} strokeWidth="1.8" strokeLinejoin="round">
-          <rect x="8.5" y="7.5" width="15" height="17" rx="1.5" />
-          <path d="M8.5 11.5h15M11 19.5h10" />
-          <rect x="14" y="10" width="4" height="4" rx="0.8" fill={spool} />
-        </g>
-      ) : (
-        <>
-          <circle cx="16" cy="16" r="9.6" fill={spool} />
-          <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
-          <circle cx="16" cy="16" r="2.7" fill={hub} />
-        </>
-      )}
+      <circle cx="16" cy="16" r="9.6" fill={spool} />
+      <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
+      <circle cx="16" cy="16" r="2.7" fill={hub} />
     </svg>
   );
 }
