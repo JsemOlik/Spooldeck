@@ -1,6 +1,6 @@
 # JSON API
 
-Spooldeck has a JSON API under `/api/v1` for scripts, home automation, shortcuts and other apps. It can do everything the web interface does: list and add spools, log prints (also straight from G-code), weigh in, manage filaments and notes, resolve scanned codes and import Prusament spools.
+Spooldeck has a JSON API under `/api/v1` for scripts, home automation, shortcuts and other apps. It can do everything the web interface does: list and add spools, log prints (also straight from G-code), weigh in, manage filaments and notes, connect Klipper printers, resolve scanned codes and import Prusament spools.
 
 The API uses the same validation and logic as the web forms, so the rules and error messages are the same.
 
@@ -108,6 +108,37 @@ curl -X POST https://spools.example.com/api/v1/prints \
   -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"printName":"benchy","usage":[{"spoolId":3,"grams":12.4}]}'
 ```
+
+### Printers
+
+Klipper printers that Spooldeck follows through Moonraker. While a printer prints, the usage of the loaded spool is updated every few seconds without any API calls; these endpoints manage the printers and the loaded spool.
+
+| Method | Path                  | Body / query                     | Notes                                                                                                    |
+| ------ | --------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| GET    | `printers`            |                                  | Every printer with its loaded `spool`, `live` status and current `job`.                                  |
+| POST   | `printers`            | `{name, url, apiKey?}`           | Adds a printer and tries to connect right away. Returns `{id, online, message}`.                         |
+| GET    | `printers/{id}`       |                                  | One printer, shaped like the list entries.                                                               |
+| PUT    | `printers/{id}`       | `{name, url, apiKey?}`           | Leave `apiKey` out to keep the saved key, or send `null` to remove it. Returns `{online, message}`.      |
+| DELETE | `printers/{id}`       |                                  | Usage already logged stays on the spools.                                                                |
+| POST   | `printers/{id}/spool` | `{spoolId}`                      | Loads a spool on the printer, or unloads it with `null`. A spool is on one printer at a time, so it comes off any other. |
+
+`url` is Moonraker's address; a missing `http://` is added. The API key is never returned; `hasApiKey` says whether one is saved. A printer looks like this:
+
+```json
+{
+  "id": 1,
+  "name": "Voron",
+  "url": "http://voron.local:7125",
+  "hasApiKey": false,
+  "spool": { "id": 3, "code": "4Y24FJ", "filamentName": "Prusament PLA Galaxy Black", "colorName": "Galaxy Black", "colorHex": "#3d3e3d", "brandName": "Prusament", "materialName": "PLA", "remaining": 812.4 },
+  "live": { "online": true, "state": "printing", "filename": "benchy.gcode", "progress": 0.42, "message": null, "error": null, "checkedAt": "2026-10-24T13:36:00.000Z" },
+  "job": { "printName": "benchy", "usageId": 57, "grams": 6.3 }
+}
+```
+
+- `live` is null until the printer has been polled once. When it can't be reached, `online` is false and `error` says why.
+- `state` is Klipper's: `standby`, `printing`, `paused`, `complete`, `cancelled` or `error`.
+- `job` is the print being tracked, with the grams taken off the loaded spool so far and the usage entry they're in. It's null when nothing is printing.
 
 ### Filaments and notes
 

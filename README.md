@@ -8,6 +8,7 @@ A self-hosted filament tracker for 3D printing. It runs as a single-user app wit
 - **Scan a Prusament spool** and the app imports the spool's real data (net and empty-spool weight, length, manufacture date, diameter tolerance, nozzle and bed temps, color).
 - **Print your own labels** for any other spool. Stick one on the box; scanning it, even with the phone's normal camera app, opens that spool.
 - **Log usage per print**: upload the G-code from PrusaSlicer and the filament it used comes off the right spools, even for multi-material prints. You can also type in the grams, or weigh the spool and enter the scale reading. Remaining weight, estimated length and cost per print are calculated from that.
+- **Follow Klipper printers live:** connect a printer through Moonraker, pick the spool that's loaded, and the spool's weight goes down while it prints.
 - **Keep the details:** brand, material, color, temps, drying settings, price, where you bought it and storage location, plus dated notes like "strings above 230 °C" for the next time you use the same filament.
 
 Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
@@ -89,6 +90,7 @@ Spooldeck is meant for one person, but it's built to survive being exposed to th
 - **Access checks:** every page, Server Action and API route (except the `/api/health` check) verifies the session server-side.
 - **API tokens:** the JSON API under `/api/v1` takes `Authorization: Bearer <token>`. Tokens come from `POST /api/v1/auth/login`, are ordinary sessions, and are revoked by "Sign out everywhere" and password changes. See [docs/api.md](docs/api.md).
 - **Prusament lookups:** only `prusament.com` URLs are fetched, which prevents SSRF.
+- **Printers:** the server only connects to printer addresses you add. Moonraker API keys are stored in the database and never sent back by the API or shown in the web interface.
 - **Search engines:** pages are `noindex`. Framing and camera use from other origins are blocked.
 
 ### Forgot your password?
@@ -117,6 +119,24 @@ Open **Log print** and drop in the file PrusaSlicer exported, either plain `.gco
 - **Multi-material:** each extruder or MMU slot gets its own row. Pick "Don't log this filament" for any you don't want to track.
 - **Missing density:** if the filament profile in PrusaSlicer has no density, the slicer reports only a volume. Spooldeck then estimates the grams from the chosen spool's material density.
 - **Privacy:** the file is read in your browser. Only the print name and the grams are sent to the server.
+
+## Klipper printers (Moonraker)
+
+Spooldeck can follow a Klipper printer and take the filament off the loaded spool while the print runs, so you don't have to log anything.
+
+1. Open **Printers → Add printer** and enter Moonraker's address. The address you open Mainsail or Fluidd on usually works; otherwise use the printer's IP with port 7125, e.g. `http://192.168.1.50:7125`.
+2. Pick the spool that's loaded on the printer. You can also do this from a spool's **⋯** menu, so scanning the label on the spool you just put on is enough.
+3. Print as usual. Every few seconds Spooldeck reads how much filament Klipper has extruded, converts it to grams with the spool's diameter and material density, and keeps one usage entry per print up to date. The printer card, the dashboard and the spool page update on their own.
+
+Details:
+
+- **Server-side connection:** the Spooldeck server talks to the printer, not your browser, so the server (or its container) has to reach the printer on your network.
+- **Access:** if Moonraker requires sign-in, either add Spooldeck's address to `trusted_clients` in `moonraker.conf` or enter an API key. You can read the key with `curl http://<printer>:7125/access/api_key` from a machine that's already trusted.
+- **Swapping spools mid-print:** pick the new spool when you swap. The old spool keeps what was printed so far and the new one counts from that point.
+- **No spool loaded yet:** if you start a print and pick the spool afterwards, the whole print is counted on it.
+- **Cancelled and failed prints** keep the filament they used, marked "Cancelled" or "Failed" in the usage history.
+- **Restarts:** the print being tracked is saved, so if Spooldeck restarts mid-print it carries on with the same entry. Prints that start and finish entirely while Spooldeck is down aren't logged; use **Log print** for those.
+- **One spool per printer:** Klipper reports the total filament for the job, so toolchangers and multi-material units are counted against the single loaded spool. For multi-material prints, upload the G-code on **Log print** instead.
 
 ## JSON API
 
