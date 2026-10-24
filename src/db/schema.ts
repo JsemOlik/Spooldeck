@@ -216,6 +216,10 @@ export const labelTemplates = pgTable("label_templates", {
 export const PRINTER_KINDS = ["moonraker", "prusalink"] as const;
 export type PrinterKind = (typeof PRINTER_KINDS)[number];
 
+/** How the printer moves: the bed on Y (an i3 or Bambu A1) or a CoreXY gantry over a bed that drops. */
+export const PRINTER_MOTIONS = ["bedslinger", "corexy"] as const;
+export type PrinterMotion = (typeof PRINTER_MOTIONS)[number];
+
 /**
  * The print a printer is working on, as far as Spooldeck has counted it. `counter` is the
  * printer's own measure (Klipper: mm extruded; PrusaLink: fraction done) and `amounts` splits
@@ -245,6 +249,11 @@ export const printers = pgTable("printers", {
   apiKey: text("api_key"),
   // Toolheads (XL, toolchangers) or MMU slots; each can hold its own spool.
   tools: integer("tools").notNull().default(1),
+  // What it is and where it stands, for telling printers apart and for their labels.
+  brand: text("brand"),
+  model: text("model"),
+  motion: text("motion", { enum: PRINTER_MOTIONS }),
+  location: text("location"),
   job: jsonb("job").$type<PrinterJob>(),
   createdAt: createdAt(),
 });

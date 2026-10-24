@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { brands, filaments, materials, spools, usageLogs } from "@/db/schema";
+import { brands, filaments, materials, printers, spools, usageLogs } from "@/db/schema";
 
 const RECENT_PRINTS = 15;
 // Enough entries for the recent prints even when each one used several tools or spools.
@@ -157,3 +157,24 @@ export async function getPrinterHistory(printerId: number, currency: string) {
 }
 
 export type PrinterHistory = Awaited<ReturnType<typeof getPrinterHistory>>;
+
+/** Printer makers offered in the printer form, besides the ones already used. */
+const COMMON_BRANDS = ["Anycubic", "Bambu Lab", "Creality", "Elegoo", "Prusa", "Qidi", "RatRig", "Snapmaker", "Sovol", "Voron"];
+
+/** Brands and locations to suggest in the printer form. Locations include where spools are kept. */
+export async function getPrinterSuggestions() {
+  const [brandRows, locationRows] = await Promise.all([
+    db.selectDistinct({ name: printers.brand }).from(printers).where(and(isNotNull(printers.brand), ne(printers.brand, ""))),
+    db
+      .select({ name: sql<string>`l.name` })
+      .from(
+        sql`(select ${printers.location} as name from ${printers} union select ${spools.location} from ${spools}) as l`,
+      )
+      .where(sql`l.name is not null and l.name <> ''`)
+      .orderBy(asc(sql`l.name`)),
+  ]);
+  const brandNames = [...new Set([...COMMON_BRANDS, ...brandRows.map((r) => r.name!)])].sort((a, b) => a.localeCompare(b));
+  return { brands: brandNames, locations: locationRows.map((r) => r.name) };
+}
+
+export type PrinterSuggestions = Awaited<ReturnType<typeof getPrinterSuggestions>>;

@@ -14,11 +14,27 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { PrinterKind } from "@/db/schema";
+import type { PrinterSuggestions } from "@/db/queries/printers";
+import { PRINTER_MOTIONS, type PrinterKind, type PrinterMotion } from "@/db/schema";
 import { type ActionState, initialActionState } from "@/lib/action-state";
+import { MOTION_ABOUT, MOTION_LABEL } from "@/lib/printers/motion";
 
 type SaveState = ActionState & { online?: boolean };
-type Editable = { id: number; name: string; kind: PrinterKind; url: string; username: string | null; hasApiKey: boolean; tools: number };
+type Editable = {
+  id: number;
+  name: string;
+  kind: PrinterKind;
+  url: string;
+  username: string | null;
+  hasApiKey: boolean;
+  tools: number;
+  brand: string | null;
+  model: string | null;
+  motion: PrinterMotion | null;
+  location: string | null;
+};
+
+const NO_MOTION = "none";
 
 const KINDS: Record<
   PrinterKind,
@@ -47,20 +63,29 @@ const KINDS: Record<
 };
 
 /** Adds a printer, or edits one when `printer` is given. */
-export function PrinterDialog({ printer, trigger }: { printer?: Editable; trigger: React.ReactNode }) {
+export function PrinterDialog({
+  printer,
+  trigger,
+  suggestions,
+}: {
+  printer?: Editable;
+  trigger: React.ReactNode;
+  /** Brands and locations offered while typing. */
+  suggestions?: PrinterSuggestions;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         {/* Mounted only while open, so each opening starts with a fresh form state. */}
-        <PrinterForm printer={printer} onDone={() => setOpen(false)} />
+        <PrinterForm printer={printer} suggestions={suggestions} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function PrinterForm({ printer, onDone }: { printer?: Editable; onDone: () => void }) {
+function PrinterForm({ printer, suggestions, onDone }: { printer?: Editable; suggestions?: PrinterSuggestions; onDone: () => void }) {
   const [state, formAction, pending] = useActionState<SaveState, FormData>(async (prev, formData) => {
     const result = await savePrinterAction(printer?.id ?? null, prev, formData);
     // Toast here rather than in an effect: adding the first printer swaps the page's empty
@@ -73,6 +98,7 @@ function PrinterForm({ printer, onDone }: { printer?: Editable; onDone: () => vo
     return result;
   }, initialActionState);
   const [kind, setKind] = useState<PrinterKind>(printer?.kind ?? "moonraker");
+  const [motion, setMotion] = useState<string>(printer?.motion ?? NO_MOTION);
   const [clearKey, setClearKey] = useState(false);
   const k = KINDS[kind];
   const [deleting, startDelete] = useTransition();
@@ -92,7 +118,50 @@ function PrinterForm({ printer, onDone }: { printer?: Editable; onDone: () => vo
       <Field label="Name" htmlFor="printer-name" error={fe.name}>
         <Input id="printer-name" name="name" required maxLength={100} defaultValue={printer?.name} placeholder="e.g. Voron" />
       </Field>
-      <Field label="Type" htmlFor="printer-kind" error={fe.kind}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Brand" htmlFor="printer-brand" error={fe.brand}>
+          <Input id="printer-brand" name="brand" list="printer-brand-options" maxLength={100} defaultValue={printer?.brand ?? ""} placeholder="Prusa" />
+          <datalist id="printer-brand-options">
+            {suggestions?.brands.map((b) => <option key={b} value={b} />)}
+          </datalist>
+        </Field>
+        <Field label="Model" htmlFor="printer-model" error={fe.model}>
+          <Input id="printer-model" name="model" maxLength={100} defaultValue={printer?.model ?? ""} placeholder="Core One" />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Motion system" htmlFor="printer-motion" error={fe.motion}>
+          <input type="hidden" name="motion" value={motion === NO_MOTION ? "" : motion} />
+          <Select value={motion} onValueChange={setMotion}>
+            <SelectTrigger id="printer-motion" className="w-full">
+              <SelectValue>{motion === NO_MOTION ? "Not set" : MOTION_LABEL[motion as PrinterMotion]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value={NO_MOTION}>Not set</SelectItem>
+              {PRINTER_MOTIONS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {MOTION_LABEL[m]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Location" htmlFor="printer-location" error={fe.location}>
+          <Input
+            id="printer-location"
+            name="location"
+            list="printer-location-options"
+            maxLength={100}
+            defaultValue={printer?.location ?? ""}
+            placeholder="Workshop"
+          />
+          <datalist id="printer-location-options">
+            {suggestions?.locations.map((l) => <option key={l} value={l} />)}
+          </datalist>
+        </Field>
+      </div>
+      {motion !== NO_MOTION && <p className="text-muted-foreground -mt-2 text-xs">{MOTION_ABOUT[motion as PrinterMotion]}</p>}
+      <Field label="Connection" htmlFor="printer-kind" error={fe.kind}>
         <input type="hidden" name="kind" value={kind} />
         <Select value={kind} onValueChange={(v) => setKind(v as PrinterKind)}>
           <SelectTrigger id="printer-kind" className="w-full">

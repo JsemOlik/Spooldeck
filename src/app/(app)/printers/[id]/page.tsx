@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PencilIcon } from "lucide-react";
+import { PencilIcon, TagIcon } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ColorSwatch } from "@/components/color-swatch";
 import { PageHeader } from "@/components/page-header";
 import { PrinterCard } from "@/components/printers/printer-card";
+import { MotionIcon } from "@/components/printers/motion-icon";
 import { PrinterDialog } from "@/components/printers/printer-dialog";
 import { PrinterStateBadge } from "@/components/printers/printer-status";
 import { UsageChart } from "@/components/printers/usage-chart";
@@ -14,10 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
-import { type PrintStatus, getPrinterHistory } from "@/db/queries/printers";
+import { type PrintStatus, getPrinterHistory, getPrinterSuggestions } from "@/db/queries/printers";
 import { listSpools } from "@/db/queries/spools";
 import { formatDate, formatDateTime, formatGrams, formatMoney, relativeTime } from "@/lib/format";
 import { intParam } from "@/lib/params";
+import { MOTION_LABEL } from "@/lib/printers/motion";
 import { getAppSettings } from "@/lib/settings";
 import { isPrinting, listPrinters, loadedElsewhere } from "@/server/services/printers";
 
@@ -39,10 +41,11 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
   const id = intParam((await params).id);
   if (!id) notFound();
   const settings = await getAppSettings();
-  const [printers, history, spools] = await Promise.all([
+  const [printers, history, spools, suggestions] = await Promise.all([
     listPrinters(),
     getPrinterHistory(id, settings.currency),
     listSpools({ status: "active" }),
+    getPrinterSuggestions(),
   ]);
   const printer = printers.find((p) => p.id === id);
   if (!printer) notFound();
@@ -58,6 +61,15 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
   }));
   const maxFilament = Math.max(1, ...history.byFilament.map((f) => f.grams));
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const makeModel = [printer.brand, printer.model].filter(Boolean).join(" ");
+  const editDialog = (trigger: React.ReactNode) => <PrinterDialog printer={printer} suggestions={suggestions} trigger={trigger} />;
+  const details: [string, React.ReactNode][] = [
+    // Brand, model and motion system head the card.
+    ["Location", printer.location],
+    ["Tools", printer.tools > 1 ? String(printer.tools) : null],
+    ["Connection", KIND_LABEL[printer.kind]],
+    ["Address", <span key="url" className="break-all">{printer.url}</span>],
+  ];
 
   return (
     <>
@@ -69,27 +81,61 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
             <PrinterStateBadge printer={printer} />
           </span>
         }
-        description={
-          <>
-            {KIND_LABEL[printer.kind]}
-            {printer.tools > 1 && ` · ${plural(printer.tools, "tool")}`} · <span className="break-all">{printer.url}</span>
-          </>
-        }
+        description={[makeModel, printer.location].filter(Boolean).join(" · ") || KIND_LABEL[printer.kind]}
         actions={
-          <PrinterDialog
-            printer={printer}
-            trigger={
+          <>
+            <Button variant="outline" asChild>
+              <Link href={`/labels?printers=${printer.id}`}>
+                <TagIcon />
+                Print label
+              </Link>
+            </Button>
+            {editDialog(
               <Button variant="outline">
                 <PencilIcon />
                 Edit
-              </Button>
-            }
-          />
+              </Button>,
+            )}
+          </>
         }
       />
 
       <div className="grid gap-6">
-        <PrinterCard printer={printer} spools={choices} elsewhere={loadedElsewhere(printers, printer.id)} header={false} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[20rem_1fr]">
+          <Card className="self-start">
+            <CardContent className="grid gap-4">
+              <div className="flex items-center gap-4">
+                <div className="bg-muted/60 flex size-20 shrink-0 items-center justify-center rounded-xl">
+                  <MotionIcon motion={printer.motion} className="size-14" />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{makeModel || printer.name}</div>
+                  <div className="text-muted-foreground text-sm">
+                    {printer.motion ? MOTION_LABEL[printer.motion] : "Motion system not set"}
+                  </div>
+                </div>
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                {details
+                  .filter(([, value]) => value)
+                  .map(([label, value]) => (
+                    <div key={label} className="col-span-2 grid grid-cols-subgrid">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0">{value}</dd>
+                    </div>
+                  ))}
+              </dl>
+              {!(printer.brand || printer.model || printer.motion || printer.location) &&
+                editDialog(
+                  <Button variant="outline" size="sm" className="justify-self-start">
+                    <PencilIcon />
+                    Add brand, model and location
+                  </Button>,
+                )}
+            </CardContent>
+          </Card>
+          <PrinterCard printer={printer} spools={choices} elsewhere={loadedElsewhere(printers, printer.id)} header={false} />
+        </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[

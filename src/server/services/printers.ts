@@ -1,10 +1,10 @@
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getSpoolRows } from "@/db/queries/spools";
-import { type Printer, type PrinterKind, printerSpools, printers, spools, usageLogs } from "@/db/schema";
+import { type Printer, type PrinterKind, type PrinterMotion, printerSpools, printers, spools, usageLogs } from "@/db/schema";
 import { type ActionState, fromZodError } from "@/lib/action-state";
 import { printNameFromFile } from "@/lib/slicer/parse";
-import { printerSchema } from "@/lib/validation";
+import { nullify, printerSchema } from "@/lib/validation";
 import { forgetLiveStatus, getLiveStatus, pollPrinter } from "@/server/printer-sync";
 import type { Input } from "@/server/services/spools";
 
@@ -34,6 +34,10 @@ export type PrinterView = {
   hasApiKey: boolean;
   /** Toolheads or MMU slots. */
   tools: number;
+  brand: string | null;
+  model: string | null;
+  motion: PrinterMotion | null;
+  location: string | null;
   /** One per tool: the spool on it and, during a print, the grams it has used so far. */
   slots: { tool: number; spool: LoadedSpool | null; grams: number | null }[];
   /** Null until the printer has been polled once. */
@@ -122,6 +126,10 @@ export async function listPrinters(): Promise<PrinterView[]> {
       username: p.username,
       hasApiKey: !!p.apiKey,
       tools: p.tools,
+      brand: p.brand,
+      model: p.model,
+      motion: p.motion,
+      location: p.location,
       slots,
       live: live && {
         online: live.online,
@@ -165,10 +173,18 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 export async function createPrinter(input: Input): Promise<ActionState & { id?: number; online?: boolean }> {
   const parsed = printerSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
-  const { name, kind, url, username, apiKey, tools } = parsed.data;
+  const { name, kind, url, username, apiKey, tools, ...details } = parsed.data;
   const [row] = await db
     .insert(printers)
-    .values({ name, kind, url, username: kind === "prusalink" ? (username ?? null) : null, apiKey: apiKey ?? null, tools: tools ?? 1 })
+    .values({
+      name,
+      kind,
+      url,
+      username: kind === "prusalink" ? (username ?? null) : null,
+      apiKey: apiKey ?? null,
+      tools: tools ?? 1,
+      ...nullify(details),
+    })
     .returning({ id: printers.id });
   return { ok: true, id: row.id, ...(await checkConnection(row.id)) };
 }
@@ -183,7 +199,7 @@ async function endJob(printer: Printer) {
 export async function updatePrinter(id: number, input: Input): Promise<ActionState & { online?: boolean }> {
   const parsed = printerSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
-  const { name, kind, url, username, apiKey, clearApiKey, tools = 1 } = parsed.data;
+  const { name, kind, url, username, apiKey, clearApiKey, tools = 1, ...details } = parsed.data;
   const current = await db.query.printers.findFirst({ where: eq(printers.id, id) });
   if (!current) return { error: "Printer not found" };
   // Another kind of printer counts jobs differently, so a tracked print ends here.
@@ -199,6 +215,7 @@ export async function updatePrinter(id: number, input: Input): Promise<ActionSta
         username: kind === "prusalink" ? (username ?? null) : null,
         apiKey: apiKey ?? (clearApiKey === "on" ? null : current.apiKey),
         tools,
+        ...nullify(details),
         ...(kindChanged ? { job: null } : {}),
       })
       .where(eq(printers.id, id));

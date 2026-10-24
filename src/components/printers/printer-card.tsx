@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
-import { PencilIcon, PrinterIcon } from "lucide-react";
+import { PencilIcon } from "lucide-react";
 import { toast } from "sonner";
 import { loadSpoolAction } from "@/actions/printers";
 import { Field } from "@/components/forms/field";
+import { MotionIcon } from "@/components/printers/motion-icon";
 import { PrinterDialog } from "@/components/printers/printer-dialog";
 import { PrinterStateBadge, printerState } from "@/components/printers/printer-status";
 import { ToolStrip } from "@/components/printers/tool-strip";
@@ -14,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatGrams } from "@/lib/format";
+import type { PrinterSuggestions } from "@/db/queries/printers";
+import { printerSummary } from "@/lib/printers/motion";
 import type { PrinterView } from "@/server/services/printers";
 
 type Loaded = (number | null)[];
@@ -24,12 +27,15 @@ export function PrinterCard({
   spools,
   elsewhere = {},
   header = true,
+  suggestions,
 }: {
   printer: PrinterView;
   spools: SpoolChoice[];
   /** Spools on other printers, by id, with where they are (see loadedElsewhere). */
   elsewhere?: Record<number, string>;
   header?: boolean;
+  /** For the edit dialog. */
+  suggestions?: PrinterSuggestions;
 }) {
   const [pending, startTransition] = useTransition();
   const [loaded, setLoaded] = useOptimistic<Loaded, { tool: number; spoolId: number | null }>(
@@ -61,18 +67,19 @@ export function PrinterCard({
       {header && (
         <CardHeader>
           <div className="flex min-w-0 items-start gap-3">
-            <PrinterIcon className="text-muted-foreground mt-0.5 size-5 shrink-0" />
+            <MotionIcon motion={printer.motion} className="text-muted-foreground -mt-0.5 size-7 shrink-0" />
             <div className="min-w-0 flex-1">
               <CardTitle className="truncate">
                 <Link href={`/printers/${printer.id}`} className="hover:underline">
                   {printer.name}
                 </Link>
               </CardTitle>
-              <CardDescription className="truncate">{printer.url}</CardDescription>
+              <CardDescription className="truncate">{printerSummary(printer) || printer.url}</CardDescription>
             </div>
             <PrinterStateBadge printer={printer} />
             <PrinterDialog
               printer={printer}
+              suggestions={suggestions}
               trigger={
                 <Button variant="ghost" size="icon-sm" aria-label={`Edit ${printer.name}`} className="-mt-1">
                   <PencilIcon />

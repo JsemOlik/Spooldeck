@@ -36,6 +36,13 @@
       "when": 1792854124049,
       "tag": "0004_usage_printer",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792856120967,
+      "tag": "0005_printer_details",
+      "breakpoints": true
     }
   ]
 }

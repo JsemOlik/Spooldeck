@@ -7,13 +7,14 @@ import { PrinterDialog } from "@/components/printers/printer-dialog";
 import type { SpoolChoice } from "@/components/spools/spool-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getPrinterSuggestions } from "@/db/queries/printers";
 import { listSpools } from "@/db/queries/spools";
 import { isPrinting, listPrinters, loadedElsewhere } from "@/server/services/printers";
 
 export const metadata: Metadata = { title: "Printers" };
 
 export default async function PrintersPage() {
-  const [printers, spools] = await Promise.all([listPrinters(), listSpools({ status: "active" })]);
+  const [printers, spools, suggestions] = await Promise.all([listPrinters(), listSpools({ status: "active" }), getPrinterSuggestions()]);
   const choices: SpoolChoice[] = spools.map((s) => ({
     id: s.id,
     code: s.code,
@@ -25,6 +26,7 @@ export default async function PrintersPage() {
   }));
   const addButton = (
     <PrinterDialog
+      suggestions={suggestions}
       trigger={
         <Button>
           <PlusIcon />
@@ -57,7 +59,7 @@ export default async function PrintersPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           {printers.map((p) => (
-            <PrinterCard key={p.id} printer={p} spools={choices} elsewhere={loadedElsewhere(printers, p.id)} />
+            <PrinterCard key={p.id} printer={p} spools={choices} elsewhere={loadedElsewhere(printers, p.id)} suggestions={suggestions} />
           ))}
         </div>
       )}

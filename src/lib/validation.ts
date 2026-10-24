@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PRINTER_KINDS, SPOOL_STATUSES } from "@/db/schema";
+import { PRINTER_KINDS, PRINTER_MOTIONS, SPOOL_STATUSES } from "@/db/schema";
 import { normalizePrinterUrl } from "@/lib/printers/http";
 
 const str = (max = 200) => z.string().max(max, `At most ${max} characters`);
@@ -113,6 +113,10 @@ export const printerSchema = z.object({
   apiKey: optStr(200),
   clearApiKey: z.enum(["on", "off"]).optional(),
   tools: optInt(1, 16),
+  brand: optStr(100),
+  model: optStr(100),
+  motion: z.enum(PRINTER_MOTIONS, { error: "Pick bedslinger or CoreXY" }).optional(),
+  location: optStr(100),
 });
 
 export const noteSchema = z.object({
