@@ -201,6 +201,27 @@ export const labelTemplates = pgTable("label_templates", {
   updatedAt: updatedAt(),
 });
 
+// ---------------------------------------------------------------------------
+// Printers (Klipper via Moonraker)
+// ---------------------------------------------------------------------------
+
+export const printers = pgTable("printers", {
+  id: id(),
+  name: text("name").notNull(),
+  // Moonraker's base URL, e.g. http://voron.local:7125
+  url: text("url").notNull(),
+  apiKey: text("api_key"),
+  // The spool on the printer; prints are taken off it while they run.
+  spoolId: integer("spool_id").references(() => spools.id, { onDelete: "set null" }),
+  // The print being tracked: its file, the usage entry it grows, and Klipper's filament
+  // counter (mm) when that entry started and at the last poll.
+  jobFile: text("job_file"),
+  jobUsageId: integer("job_usage_id"),
+  jobBaseMm: doublePrecision("job_base_mm").notNull().default(0),
+  jobLastMm: doublePrecision("job_last_mm").notNull().default(0),
+  createdAt: createdAt(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Brand = typeof brands.$inferSelect;
 export type Vendor = typeof vendors.$inferSelect;
@@ -210,6 +231,7 @@ export type Spool = typeof spools.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
 export type FilamentNote = typeof filamentNotes.$inferSelect;
 export type LabelTemplate = typeof labelTemplates.$inferSelect;
+export type Printer = typeof printers.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Relations
@@ -240,4 +262,7 @@ export const usageLogsRelations = relations(usageLogs, ({ one }) => ({
 export const filamentNotesRelations = relations(filamentNotes, ({ one }) => ({
   filament: one(filaments, { fields: [filamentNotes.filamentId], references: [filaments.id] }),
   spool: one(spools, { fields: [filamentNotes.spoolId], references: [spools.id] }),
+}));
+export const printersRelations = relations(printers, ({ one }) => ({
+  spool: one(spools, { fields: [printers.spoolId], references: [spools.id] }),
 }));

@@ -105,6 +105,12 @@ export async function listSpools(filters: SpoolFilters = {}): Promise<SpoolRow[]
   return rows;
 }
 
+/** List rows (with remaining weight, diameter and density) for the given spools. */
+export async function getSpoolRows(ids: number[]): Promise<SpoolRow[]> {
+  if (!ids.length) return [];
+  return baseSpoolQuery().where(inArray(spools.id, ids));
+}
+
 export async function getSpoolDetail(id: number) {
   const spool = await db.query.spools.findFirst({
     where: eq(spools.id, id),

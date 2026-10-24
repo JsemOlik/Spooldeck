@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SPOOL_STATUSES } from "@/db/schema";
+import { normalizeMoonrakerUrl } from "@/lib/moonraker";
 
 const str = (max = 200) => z.string().max(max, `At most ${max} characters`);
 const optStr = (max = 200) => str(max).optional();
@@ -97,6 +98,18 @@ export const weighInSchema = z.object({
   scaleGrams: num().min(0, "Must be ≥ 0").max(100_000),
   includesSpool: z.enum(["on", "off"]).optional(),
   note: optStr(2000),
+});
+
+/** A Klipper printer reached through Moonraker. An empty apiKey keeps the saved one unless clearApiKey is on. */
+export const printerSchema = z.object({
+  name: str(100).min(1, "Name is required"),
+  url: z
+    .string({ error: "Enter the printer's address" })
+    .max(500)
+    .transform(normalizeMoonrakerUrl)
+    .pipe(z.url({ protocol: /^https?$/, error: "Enter an address like http://voron.local:7125" })),
+  apiKey: optStr(200),
+  clearApiKey: z.enum(["on", "off"]).optional(),
 });
 
 export const noteSchema = z.object({

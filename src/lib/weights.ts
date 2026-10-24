@@ -18,6 +18,13 @@ export function estimateLengthM(grams: number, diameterMm = 1.75, densityGcm3 = 
   return lengthCm / 100;
 }
 
+/** Grams in a length of filament (mm), e.g. from the printer's extruder counter. */
+export function gramsForLength(mm: number, diameterMm = 1.75, densityGcm3 = 1.24) {
+  if (mm <= 0 || diameterMm <= 0 || densityGcm3 <= 0) return 0;
+  const radiusMm = diameterMm / 2;
+  return ((Math.PI * radiusMm * radiusMm * mm) / 1000) * densityGcm3;
+}
+
 /** Grams used since the last reading, given a scale reading of the whole spool. */
 export function weighInUsage(opts: { scaleGrams: number; includesSpool: boolean; spoolWeight: number | null; currentRemaining: number }) {
   const net = opts.includesSpool ? opts.scaleGrams - (opts.spoolWeight ?? 0) : opts.scaleGrams;
