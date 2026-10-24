@@ -78,7 +78,7 @@ function QrLogo({ color }: { color: string | null }) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
       <rect width="32" height="32" rx="7" fill="#ffffff" />
-      <rect x="2.5" y="2.5" width="27" height="27" rx="5.5" fill={tile} stroke={shade(tile, 0.3)} strokeWidth="0.8" />
+      <rect x="2.5" y="2.5" width="27" height="27" rx="5.5" fill={tile} />
       <circle cx="16" cy="16" r="9.6" fill={spool} />
       <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
       <circle cx="16" cy="16" r="2.7" fill={hub} />
