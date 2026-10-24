@@ -15,6 +15,12 @@ describe("classifyScan", () => {
     expect(classifyScan("http://192.168.1.5:3000/s/rprnfv/")).toEqual({ kind: "code", code: "RPRNFV" });
   });
 
+  test("recognises printer label URLs", () => {
+    expect(classifyScan("https://spools.example.com/p/3")).toEqual({ kind: "printer", id: 3 });
+    expect(classifyScan("http://192.168.1.5:3000/p/12/")).toEqual({ kind: "printer", id: 12 });
+    expect(classifyScan("https://spools.example.com/p/0").kind).toBe("unknown");
+  });
+
   test("recognises bare codes, with or without #", () => {
     expect(classifyScan("rprnfv")).toEqual({ kind: "code", code: "RPRNFV" });
     expect(classifyScan(" #GDHEQV ")).toEqual({ kind: "code", code: "GDHEQV" });

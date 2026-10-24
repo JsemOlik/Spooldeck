@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { filaments, spools, usageLogs } from "@/db/schema";
+import { filaments, printers, spools, usageLogs } from "@/db/schema";
 import { brandIdByName, materialIdByName, vendorIdByName } from "@/db/queries/catalog";
 import { findFilamentByGoodsId } from "@/db/queries/filaments";
 import { getSpoolIdByCode, getSpoolIdByPrusamentId } from "@/db/queries/spools";
@@ -14,6 +15,7 @@ import type { Input } from "./spools";
 
 export type ResolvedScan =
   | { kind: "spool"; id: number }
+  | { kind: "printer"; id: number }
   | { kind: "prusament"; url: string }
   | { kind: "error"; error: string; text?: string };
 
@@ -28,6 +30,11 @@ export async function resolveScan(text: string): Promise<ResolvedScan> {
     const id = await getSpoolIdByCode(target.code);
     if (id) return { kind: "spool", id };
     return { kind: "error", error: `No spool with code ${target.code}.` };
+  }
+  if (target.kind === "printer") {
+    const printer = await db.query.printers.findFirst({ where: eq(printers.id, target.id), columns: { id: true } });
+    if (printer) return { kind: "printer", id: printer.id };
+    return { kind: "error", error: "That printer isn't in Spooldeck any more." };
   }
   return { kind: "error", error: "That code isn't a Prusament spool or a Spooldeck label.", text: target.text };
 }

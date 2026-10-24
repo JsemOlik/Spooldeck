@@ -12,6 +12,7 @@ export async function resolveScanAction(text: string, openLog: boolean): Promise
   await requireUser();
   const result = await resolveScan(text);
   if (result.kind === "spool") return { href: `/spools/${result.id}${openLog ? "?scanned=1" : ""}` };
+  if (result.kind === "printer") return { href: `/printers/${result.id}` };
   if (result.kind === "prusament") return { href: `/scan/prusament?u=${encodeURIComponent(result.url)}` };
   return { error: result.error, text: result.text };
 }

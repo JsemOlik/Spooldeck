@@ -12,3 +12,7 @@ export async function qrSvg(text: string, opts: { margin?: number; ecl?: "L" | "
 export function spoolUrl(baseUrl: string, code: string) {
   return `${baseUrl.replace(/\/+$/, "")}/s/${code}`;
 }
+
+export function printerUrl(baseUrl: string, id: number) {
+  return `${baseUrl.replace(/\/+$/, "")}/p/${id}`;
+}
