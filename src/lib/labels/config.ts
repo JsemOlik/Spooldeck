@@ -36,12 +36,18 @@ export const LABEL_FIELD_LABELS: Record<LabelField, string> = {
 export const layoutSchema = z.object({
   qrPosition: z.enum(["left", "right", "top", "none"]).default("left"),
   qrScale: z.number().min(0.3).max(1).default(1),
-  fields: z.array(z.enum(LABEL_FIELDS)).default(["brand", "material", "colorName", "nozzle", "bed", "code"]),
+  fields: z.array(z.enum(LABEL_FIELDS)).default(["brand", "material", "colorName", "code"]),
   fontScale: z.number().min(0.5).max(2).default(1),
   paddingMm: z.number().min(0).max(10).default(2),
   border: z.boolean().default(false),
-  swatch: z.boolean().default(true),
+  /** A bar in the filament's colour under the text. */
+  colorBar: z.boolean().default(true),
+  /** A colour dot next to the title. */
+  swatch: z.boolean().default(false),
+  /** A strip of colour along the label's edge. */
   colorBand: z.boolean().default(false),
+  /** The Spooldeck spool in the middle of the QR code, on the filament's colour. */
+  qrLogo: z.boolean().default(true),
 });
 export type LabelLayout = z.infer<typeof layoutSchema>;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PrinterIcon, SaveIcon, StarIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -176,13 +176,13 @@ export function LabelDesigner({
   })}`;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="grid content-start gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-1 content-start gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Preview</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid grid-cols-1 gap-4">
             <LabelPreview data={previewData} config={config} />
             <p className="text-muted-foreground text-center text-xs">
               {config.widthMm} × {config.heightMm} mm ·{" "}
@@ -379,8 +379,12 @@ export function LabelDesigner({
               step={0.5}
               onChange={(paddingMm) => setLayout({ paddingMm })}
             />
-            <SwitchRow id="swatch" label="Color dot" checked={layout.swatch} onChange={(swatch) => setLayout({ swatch })} />
-            <SwitchRow id="band" label="Color band" checked={layout.colorBand} onChange={(colorBand) => setLayout({ colorBand })} />
+            <SwitchRow id="bar" label="Color bar" checked={layout.colorBar} onChange={(colorBar) => setLayout({ colorBar })} />
+            <SwitchRow id="swatch" label="Color dot by the name" checked={layout.swatch} onChange={(swatch) => setLayout({ swatch })} />
+            <SwitchRow id="band" label="Color strip on the edge" checked={layout.colorBand} onChange={(colorBand) => setLayout({ colorBand })} />
+            {layout.qrPosition !== "none" && (
+              <SwitchRow id="logo" label="Logo in the QR code" checked={layout.qrLogo} onChange={(qrLogo) => setLayout({ qrLogo })} />
+            )}
             <SwitchRow id="border" label="Border (cut guide)" checked={layout.border} onChange={(border) => setLayout({ border })} />
             <fieldset className="grid gap-2">
               <legend className="mb-2 text-sm font-medium">Fields</legend>
@@ -470,12 +474,24 @@ function sheetOverflow({ widthMm, heightMm, sheet }: LabelConfig) {
 function LabelPreview({ data, config }: { data: LabelData; config: LabelConfig }) {
   const wPx = config.widthMm * MM_TO_PX;
   const hPx = config.heightMm * MM_TO_PX;
-  const scale = Math.min(3, 250 / wPx, 260 / hPx);
+  // As large as the card allows, so small labels can be read.
+  const [room, setRoom] = useState(480);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setRoom(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const scale = Math.min(4, Math.min(room, 520) / wPx, 320 / hPx);
   return (
-    <div className="bg-muted/60 flex justify-center rounded-lg p-4 sm:p-6">
-      <div className="shadow-md" style={{ width: wPx * scale, height: hPx * scale }} data-testid="label-preview">
-        <div style={{ width: wPx, height: hPx, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-          <LabelView data={data} config={config} />
+    <div className="bg-muted/60 rounded-lg p-4 sm:p-6">
+      <div ref={ref} className="flex justify-center">
+        <div className="shadow-md" style={{ width: wPx * scale, height: hPx * scale }} data-testid="label-preview">
+          <div style={{ width: wPx, height: hPx, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+            <LabelView data={data} config={config} />
+          </div>
         </div>
       </div>
     </div>

@@ -8,9 +8,16 @@ export type LabelData = {
   id: number;
   code: string;
   qrSvg: string;
+  /** The same QR code with more error correction, so a logo can cover its middle. */
+  qrLogoSvg: string;
   colorHex: string | null;
   values: Partial<Record<LabelField, string>>;
 };
+
+async function qrCodes(url: string) {
+  const [plain, logo] = await Promise.all([qrSvg(url), qrSvg(url, { ecl: "H" })]);
+  return { qrSvg: plain, qrLogoSvg: logo };
+}
 
 export async function buildLabelData(spools: LabelSpool[], baseUrl: string, currency: string): Promise<LabelData[]> {
   return Promise.all(
@@ -22,7 +29,7 @@ export async function buildLabelData(spools: LabelSpool[], baseUrl: string, curr
       return {
         id: s.id,
         code: s.code,
-        qrSvg: await qrSvg(spoolUrl(baseUrl, s.code)),
+        ...(await qrCodes(spoolUrl(baseUrl, s.code))),
         colorHex: f.colorHex,
         values: {
           brand: f.brand?.name ?? undefined,
@@ -48,8 +55,8 @@ export async function sampleLabelData(baseUrl: string): Promise<LabelData> {
   return {
     id: 0,
     code: "ABC123",
-    qrSvg: await qrSvg(spoolUrl(baseUrl, "ABC123")),
-    colorHex: "#f97316",
+    ...(await qrCodes(spoolUrl(baseUrl, "ABC123"))),
+    colorHex: "#ec6b1c",
     values: {
       brand: "Prusament",
       material: "PETG",

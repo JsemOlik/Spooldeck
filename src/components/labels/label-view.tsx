@@ -28,8 +28,12 @@ function useFitText() {
       const top = children[0].getBoundingClientRect().top;
       const bottom = children[children.length - 1].getBoundingClientRect().bottom;
       if (bottom - top > box.height + 0.1) return true;
-      return [...el.querySelectorAll<HTMLElement>("[data-fit]")].some(
-        (line) => line.scrollWidth > line.clientWidth + 0.5 || line.scrollHeight > line.clientHeight + 0.5,
+      // Single lines only overflow sideways (their glyphs can poke a little above or below the
+      // line box at any size); a clamped title overflows when a line is cut off.
+      return [...el.querySelectorAll<HTMLElement>("[data-fit]")].some((line) =>
+        line.dataset.fit === "clamp"
+          ? line.scrollHeight > line.clientHeight + parseFloat(getComputedStyle(line).fontSize) * 0.4
+          : line.scrollWidth > line.clientWidth + 0.5,
       );
     };
     const run = () => {
@@ -50,9 +54,42 @@ function useFitText() {
   return ref;
 }
 
+/** Mixes a hex colour towards black (amount > 0) or white (amount < 0). */
+function shade(hex: string, amount: number) {
+  const target = amount > 0 ? 0 : 255;
+  const t = Math.abs(amount);
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `#${rgb.map((c) => Math.round(c + (target - c) * t).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function isDark(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45;
+}
+
 /**
- * A single physical label, sized in millimetres. Always black on white so it
- * prints the same on thermal and colour printers.
+ * Spooldeck's spool on a tile of the filament's colour, for the middle of the QR code. The white
+ * margin keeps it apart from the modules around it; the code's high error correction covers it.
+ */
+function QrLogo({ color }: { color: string | null }) {
+  const tile = color ?? "#000000";
+  // The spool is black on light colours and white on dark ones, the hub the opposite.
+  const [spool, hub] = isDark(tile) ? ["#ffffff", "#000000"] : ["#000000", "#ffffff"];
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
+      <rect width="32" height="32" rx="7" fill="#ffffff" />
+      <rect x="2.5" y="2.5" width="27" height="27" rx="5.5" fill={tile} stroke={shade(tile, 0.3)} strokeWidth="0.8" />
+      <circle cx="16" cy="16" r="9.6" fill={spool} />
+      <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
+      <circle cx="16" cy="16" r="2.7" fill={hub} />
+    </svg>
+  );
+}
+
+/**
+ * A single physical label, sized in millimetres. The QR code and title are black on white;
+ * the brand and footer are dark grey, and the colour bar and logo print in the filament's
+ * colour (or as grey on a thermal printer).
  */
 export function LabelView({ data, config }: { data: LabelData; config: Pick<LabelConfig, "widthMm" | "heightMm" | "layout"> }) {
   const textRef = useFitText();
@@ -60,27 +97,30 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
   const pad = layout.paddingMm;
   const has = (f: (typeof layout.fields)[number]) => layout.fields.includes(f) && !!data.values[f];
   const v = data.values;
+  const color = data.colorHex;
 
   // The colour band gets its own strip of the label so it never overlaps the QR code or text,
   // plus at least 1 mm of white next to it so it can't merge into the QR code's quiet zone.
-  const bandMm = layout.colorBand && data.colorHex ? Math.max(1.5, w * 0.03) : 0;
+  const bandMm = layout.colorBand && color ? Math.max(1.5, w * 0.03) : 0;
   const bandSide = layout.qrPosition === "right" ? "right" : "left";
   const bandPad = bandMm > 0 ? bandMm + Math.max(pad, 1) : pad;
 
   const vertical = layout.qrPosition === "top";
   const innerH = h - pad * 2;
   const innerW = w - pad - bandPad;
-  const gapMm = Math.max(1, pad);
+  const gapMm = Math.max(1.5, pad, Math.min(innerW, innerH) * 0.08);
   const qrMm =
     layout.qrPosition === "none"
       ? 0
-      : Math.max(5, (vertical ? Math.min(innerW, innerH * 0.55) : Math.min(innerH, innerW * 0.6)) * layout.qrScale);
+      : Math.max(5, (vertical ? Math.min(innerW, innerH * 0.55) : Math.min(innerH, innerW * 0.5)) * layout.qrScale);
   const textW = vertical || qrMm === 0 ? innerW : innerW - qrMm - gapMm;
   const textH = vertical && qrMm > 0 ? innerH - qrMm - gapMm : innerH;
+  const logo = layout.qrLogo && qrMm >= 8;
 
   const title = (has("colorName") && v.colorName) || (has("filamentName") && v.filamentName) || v.colorName || v.filamentName;
-  const subtitle = [has("brand") && v.brand, has("material") && v.material].filter(Boolean).join(" · ");
-  const tempParts = [has("nozzle") && `N ${v.nozzle}`, has("bed") && `B ${v.bed}`].filter(Boolean) as string[];
+  const brand = has("brand") ? v.brand : undefined;
+  const footer = [has("material") && v.material, has("code") && `#${data.code}`].filter(Boolean).join(" · ");
+  const tempParts = [has("nozzle") && `Nozzle ${v.nozzle}`, has("bed") && `Bed ${v.bed}`].filter(Boolean) as string[];
   const extra = [
     has("filamentName") && has("colorName") ? v.filamentName : null,
     [has("diameter") && v.diameter, has("weight") && v.weight].filter(Boolean).join(" · "),
@@ -88,15 +128,25 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
     [has("purchaseDate") && v.purchaseDate, has("location") && v.location].filter(Boolean).join(" · "),
   ].filter(Boolean) as string[];
 
+  // The bar is a fixed size; the text shares what's left.
+  const barMm = layout.colorBar && color ? Math.min(7, Math.max(1.5, textH * 0.17)) : 0;
+  const barGapMm = barMm > 0 ? Math.max(0.6, barMm * 0.3) : 0;
+
   // Starting sizes; useFitText shrinks them further if the text still doesn't fit.
-  const lines = (subtitle ? 1 : 0) + tempParts.length + extra.length + (has("code") ? 1 : 0);
-  const titleLines = (title?.length ?? 0) * 0.6 * Math.min(textW / 6, 7) > textW ? 2 : 1;
-  const fitByHeight = textH / (lines * 1.35 + titleLines * 1.75);
-  const bodyMm = Math.max(1, Math.min(fitByHeight, textW / 9, 5) * layout.fontScale);
-  const titleMm = Math.max(1.4, Math.min(bodyMm * 1.6, textW / 5));
+  const titleRatio = 1.3;
+  const detailRatio = 0.78;
+  const titleLines = (title?.length ?? 0) * 0.6 * Math.min(textW / 6, 7) * titleRatio > textW ? 2 : 1;
+  const textLines = (brand ? 1 : 0) + titleLines * titleRatio + (footer ? 1 : 0);
   // Nozzle and bed temps share a line only when it fits; otherwise one per line.
-  const joinedTemps = tempParts.join("  ");
-  const temps = tempParts.length > 1 && joinedTemps.length * 0.6 * bodyMm <= textW ? [joinedTemps] : tempParts;
+  const roughBody = Math.min((textH - barMm - barGapMm) / ((textLines + (tempParts.length + extra.length) * detailRatio) * 1.3), textW / 8, 5.5);
+  const joinedTemps = tempParts.join(" · ");
+  const temps = tempParts.length > 1 && joinedTemps.length * 0.55 * roughBody * detailRatio <= textW ? [joinedTemps] : tempParts;
+  const details = [...temps, ...extra];
+  const fitByHeight = (textH - barMm - barGapMm) / ((textLines + details.length * detailRatio) * 1.3 + 0.4);
+  const bodyMm = Math.max(1, Math.min(fitByHeight, textW / 8, 5.5) * layout.fontScale);
+  const titleMm = Math.max(1.4, Math.min(bodyMm * titleRatio, textW / 4.5));
+  const detailMm = bodyMm * detailRatio;
+  const align = vertical ? "center" : "left";
 
   return (
     <div
@@ -115,53 +165,73 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
         printColorAdjust: "exact",
       }}
     >
-      {bandMm > 0 && (
-        <div aria-hidden className="absolute inset-y-0" style={{ [bandSide]: 0, width: `${bandMm}mm`, background: data.colorHex! }} />
-      )}
+      {bandMm > 0 && <div aria-hidden className="absolute inset-y-0" style={{ [bandSide]: 0, width: `${bandMm}mm`, background: color! }} />}
       {qrMm > 0 && (
-        <div
-          className="shrink-0 self-center [&>svg]:block [&>svg]:size-full"
-          style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}
-          dangerouslySetInnerHTML={{ __html: data.qrSvg }}
-        />
+        <div className="relative shrink-0 self-center" style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}>
+          <div className="size-full [&>svg]:block [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: logo ? data.qrLogoSvg : data.qrSvg }} />
+          {logo && <QrLogo color={color} />}
+        </div>
       )}
       <div
         ref={textRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden"
-        style={{ gap: fit(bodyMm * 0.2), textAlign: vertical ? "center" : "left", width: vertical ? "100%" : undefined }}
+        className="flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-hidden"
+        style={{ gap: fit(bodyMm * 0.35), textAlign: align, width: vertical ? "100%" : undefined }}
       >
-        {subtitle && (
-          <div data-fit className="truncate" style={{ fontSize: fit(bodyMm) }}>
-            {subtitle}
+        {(brand || title) && (
+          <div className="grid min-w-0" style={{ gap: fit(bodyMm * 0.1) }}>
+            {brand && (
+              <div data-fit className="truncate" style={{ fontSize: fit(bodyMm), color: "#4a4a4a" }}>
+                {brand}
+              </div>
+            )}
+            {title && (
+              <div className="flex min-w-0 items-center" style={{ gap: fit(bodyMm * 0.4), justifyContent: vertical ? "center" : undefined }}>
+                {layout.swatch && color && (
+                  <span
+                    aria-hidden
+                    className="shrink-0 rounded-full"
+                    style={{ width: fit(titleMm * 0.8), height: fit(titleMm * 0.8), background: color, border: `0.2mm solid ${shade(color, 0.35)}` }}
+                  />
+                )}
+                <div
+                  data-fit="clamp"
+                  className="line-clamp-2 min-w-0 font-bold"
+                  style={{ fontSize: fit(titleMm), lineHeight: 1.08, letterSpacing: "-0.01em" }}
+                >
+                  {title}
+                </div>
+              </div>
+            )}
           </div>
         )}
-        {title && (
-          <div className="flex min-w-0 items-center" style={{ gap: fit(bodyMm * 0.5), justifyContent: vertical ? "center" : undefined }}>
-            {layout.swatch && data.colorHex && (
-              <span
+        {details.length > 0 && (
+          <div className="grid min-w-0" style={{ gap: fit(detailMm * 0.15) }}>
+            {details.map((line, i) => (
+              <div key={i} data-fit className="truncate font-medium" style={{ fontSize: fit(detailMm) }}>
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
+        {(footer || barMm > 0) && (
+          <div className="grid min-w-0" style={{ gap: `${barGapMm}mm` }}>
+            {footer && (
+              <div data-fit className="truncate" style={{ fontSize: fit(bodyMm), color: "#4a4a4a" }}>
+                {footer}
+              </div>
+            )}
+            {barMm > 0 && (
+              <div
                 aria-hidden
-                className="shrink-0 rounded-full"
-                style={{ width: fit(titleMm * 0.85), height: fit(titleMm * 0.85), background: data.colorHex, border: "0.2mm solid #000" }}
+                className="box-border w-full"
+                style={{
+                  height: `${barMm}mm`,
+                  background: color!,
+                  border: `0.25mm solid ${shade(color!, 0.3)}`,
+                  borderRadius: `${Math.min(barMm * 0.28, 1.5)}mm`,
+                }}
               />
             )}
-            <div data-fit className="line-clamp-2 min-w-0 font-bold" style={{ fontSize: fit(titleMm), lineHeight: 1.1 }}>
-              {title}
-            </div>
-          </div>
-        )}
-        {temps.map((line) => (
-          <div key={line} data-fit className="truncate font-semibold" style={{ fontSize: fit(bodyMm) }}>
-            {line}
-          </div>
-        ))}
-        {extra.map((line, i) => (
-          <div key={i} data-fit className="truncate" style={{ fontSize: fit(bodyMm * 0.9) }}>
-            {line}
-          </div>
-        ))}
-        {has("code") && (
-          <div data-fit className="truncate font-mono font-semibold tracking-wider" style={{ fontSize: fit(bodyMm) }}>
-            #{data.code}
           </div>
         )}
       </div>
