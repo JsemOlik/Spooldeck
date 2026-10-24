@@ -19,7 +19,7 @@ import { listSpools } from "@/db/queries/spools";
 import { formatDate, formatDateTime, formatGrams, formatMoney, relativeTime } from "@/lib/format";
 import { intParam } from "@/lib/params";
 import { getAppSettings } from "@/lib/settings";
-import { getPrinter, isPrinting } from "@/server/services/printers";
+import { isPrinting, listPrinters, loadedElsewhere } from "@/server/services/printers";
 
 const KIND_LABEL = { moonraker: "Klipper", prusalink: "PrusaLink" } as const;
 
@@ -39,11 +39,12 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
   const id = intParam((await params).id);
   if (!id) notFound();
   const settings = await getAppSettings();
-  const [printer, history, spools] = await Promise.all([
-    getPrinter(id),
+  const [printers, history, spools] = await Promise.all([
+    listPrinters(),
     getPrinterHistory(id, settings.currency),
     listSpools({ status: "active" }),
   ]);
+  const printer = printers.find((p) => p.id === id);
   if (!printer) notFound();
 
   const choices: SpoolChoice[] = spools.map((s) => ({
@@ -88,7 +89,7 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
       />
 
       <div className="grid gap-6">
-        <PrinterCard printer={printer} spools={choices} header={false} />
+        <PrinterCard printer={printer} spools={choices} elsewhere={loadedElsewhere(printers, printer.id)} header={false} />
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[

@@ -69,6 +69,16 @@ export function toolLabel(p: Pick<PrinterView, "name" | "tools">, tool: number) 
   return p.tools > 1 ? `${p.name} · tool ${tool + 1}` : p.name;
 }
 
+/** Where each spool on the other printers is loaded, by spool id: "Voron", or "XL · T2" on one with several tools. */
+export function loadedElsewhere(printers: PrinterView[], printerId: number) {
+  const where: Record<number, string> = {};
+  for (const p of printers) {
+    if (p.id === printerId) continue;
+    for (const s of p.slots) if (s.spool) where[s.spool.id] = p.tools > 1 ? `${p.name} · T${s.tool + 1}` : p.name;
+  }
+  return where;
+}
+
 export async function listPrinters(): Promise<PrinterView[]> {
   const rows = await db.query.printers.findMany({ with: { spools: true }, orderBy: [asc(printers.name), asc(printers.id)] });
   const spoolIds = rows.flatMap((p) => p.spools.map((s) => s.spoolId));

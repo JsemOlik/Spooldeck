@@ -19,7 +19,18 @@ import type { PrinterView } from "@/server/services/printers";
 type Loaded = (number | null)[];
 
 /** A printer's live status and loaded spools. On its own detail page the page header names it, so `header` is off. */
-export function PrinterCard({ printer, spools, header = true }: { printer: PrinterView; spools: SpoolChoice[]; header?: boolean }) {
+export function PrinterCard({
+  printer,
+  spools,
+  elsewhere = {},
+  header = true,
+}: {
+  printer: PrinterView;
+  spools: SpoolChoice[];
+  /** Spools on other printers, by id, with where they are (see loadedElsewhere). */
+  elsewhere?: Record<number, string>;
+  header?: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const [loaded, setLoaded] = useOptimistic<Loaded, { tool: number; spoolId: number | null }>(
     printer.slots.map((s) => s.spool?.id ?? null),
@@ -98,6 +109,7 @@ export function PrinterCard({ printer, spools, header = true }: { printer: Print
               };
             })}
             spools={choices}
+            elsewhere={elsewhere}
             onLoad={load}
             disabled={pending}
           />
@@ -124,6 +136,7 @@ export function PrinterCard({ printer, spools, header = true }: { printer: Print
                   onChange={(spoolId) => load(slot.tool, spoolId)}
                   noneLabel="No spool loaded"
                   disabled={pending}
+                  taken={elsewhere}
                 />
               </Field>
             );

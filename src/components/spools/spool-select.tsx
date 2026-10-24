@@ -17,6 +17,7 @@ export function SpoolSelect({
   onChange,
   noneLabel,
   disabled,
+  taken = {},
 }: {
   id?: string;
   spools: SpoolChoice[];
@@ -24,7 +25,10 @@ export function SpoolSelect({
   onChange: (spoolId: number | null) => void;
   noneLabel: string;
   disabled?: boolean;
+  /** Spools that are already somewhere else, by id, with where; they're greyed out and can't be picked. */
+  taken?: Record<number, string>;
 }) {
+  const ordered = [...spools.filter((s) => !taken[s.id]), ...spools.filter((s) => taken[s.id])];
   const selected = value ? spools.find((s) => s.id === value) : undefined;
   return (
     <Select value={value ? String(value) : NONE} onValueChange={(v) => onChange(v === NONE ? null : Number(v))} disabled={disabled}>
@@ -43,10 +47,18 @@ export function SpoolSelect({
       </SelectTrigger>
       <SelectContent position="popper" className="max-w-(--radix-select-content-available-width)">
         <SelectItem value={NONE}>{noneLabel}</SelectItem>
-        {spools.map((s) => (
-          <SelectItem key={s.id} value={String(s.id)} className="*:[span]:last:min-w-0">
+        {ordered.map((s) => (
+          <SelectItem
+            key={s.id}
+            value={String(s.id)}
+            disabled={!!taken[s.id] && s.id !== value}
+            className="*:[span]:last:min-w-0 data-disabled:grayscale"
+          >
             <ColorSwatch hex={s.colorHex} className="size-4" />
-            <span className="truncate">{spoolLabel(s)}</span>
+            <span className="truncate">
+              {spoolLabel(s)}
+              {taken[s.id] && s.id !== value && ` · on ${taken[s.id]}`}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>

@@ -8,7 +8,7 @@ import type { SpoolChoice } from "@/components/spools/spool-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { listSpools } from "@/db/queries/spools";
-import { isPrinting, listPrinters } from "@/server/services/printers";
+import { isPrinting, listPrinters, loadedElsewhere } from "@/server/services/printers";
 
 export const metadata: Metadata = { title: "Printers" };
 
@@ -57,7 +57,7 @@ export default async function PrintersPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           {printers.map((p) => (
-            <PrinterCard key={p.id} printer={p} spools={choices} />
+            <PrinterCard key={p.id} printer={p} spools={choices} elsewhere={loadedElsewhere(printers, p.id)} />
           ))}
         </div>
       )}
