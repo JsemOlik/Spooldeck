@@ -42,7 +42,7 @@ const KINDS: Record<
     placeholder: "http://192.168.1.50",
     key: "Password",
     keyHint: "PrusaLink's password, shown with the username in the printer's network settings.",
-    toolsHint: "Toolheads on an XL or an INDX (Prusa's toolchanger), or filament slots on an MMU. Each one holds its own spool.",
+    toolsHint: "Toolheads on an XL or an INDX, or filament slots on an MMU. Each one holds its own spool.",
   },
 };
 
