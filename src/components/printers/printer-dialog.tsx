@@ -31,7 +31,7 @@ const KINDS: Record<
     placeholder: "http://voron.local:7125",
     key: "API key",
     keyHint: "Only needed when Moonraker requires sign-in and Spooldeck's address isn't in trusted_clients.",
-    toolsHint: "Extruders on a toolchanger or IDEX printer. Each one holds its own spool.",
+    toolsHint: "Extruders on a toolchanger or INDX printer. Each one holds its own spool.",
   },
   prusalink: {
     label: "Prusa (PrusaLink)",
