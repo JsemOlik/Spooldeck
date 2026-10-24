@@ -7,5 +7,7 @@ const pg = await PGlite.create();
 const server = new PGLiteSocketServer({ db: pg, port: 0, maxConnections: 10 });
 await server.start();
 process.env.DATABASE_URL = `postgres://postgres@${server.getServerConn()}/postgres`;
+// PGlite runs one query at a time, and queries from parallel connections can get mixed up.
+process.env.DATABASE_POOL_MAX = "1";
 // No teardown: preload hooks run per test file, and the process exit closes everything.
 
