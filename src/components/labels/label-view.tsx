@@ -5,41 +5,58 @@ import type { LabelData } from "@/lib/labels/data";
 import type { LabelConfig, LabelLayout, PrinterLabelField } from "@/lib/labels/config";
 
 const MIN_FIT = 0.3;
+/** How far one line shrinks on its own before it's cut off with an ellipsis instead. */
+const MIN_LINE_FIT = 0.45;
 
-/** Scales a size in mm by the --fit factor that useFitText settles on. */
+/** Scales a size in mm by the --fit factor that useFitText settles on for the whole text block. */
 const fit = (mm: number) => `calc(${mm.toFixed(3)}mm * var(--fit, 1))`;
+/** A line's font size: the block's --fit, and the line's own --line if it alone is too long. */
+const fitLine = (mm: number) => `calc(${mm.toFixed(3)}mm * var(--fit, 1) * var(--line, 1))`;
 
 /**
- * Shrinks the text block until nothing overflows. The sizes computed in
- * LabelView are only an estimate; real glyph widths and line wrapping are
- * known only once the browser lays the label out (and again once fonts load).
+ * Fits the text block. A line that's too long (a material like "PC Blend", a long title) shrinks on
+ * its own so the lines that fit keep their size; then, if the block is still too tall, all of it
+ * shrinks together. The sizes computed in LabelView are only an estimate; real glyph widths and line
+ * wrapping are known only once the browser lays the label out (and again once fonts load).
  */
 function useFitText() {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const overflows = () => {
+    // Single lines only overflow sideways (their glyphs can poke a little above or below the line
+    // box at any size); a clamped title overflows when a line is cut off. Comparing a line with its
+    // own box works through a CSS transform (the scaled designer preview) too.
+    const lineOverflows = (line: HTMLElement) =>
+      line.dataset.fit === "clamp"
+        ? line.scrollHeight > line.clientHeight + parseFloat(getComputedStyle(line).fontSize) * 0.4
+        : line.scrollWidth > line.clientWidth + 0.5;
+    const tooTall = () => {
       const children = el.children;
       if (children.length === 0) return false;
-      // Fractional rects, since tiny labels overflow by less than a whole pixel. A CSS
-      // transform (the scaled designer preview) scales every rect alike, so comparing them still works.
+      // Fractional rects, since tiny labels overflow by less than a whole pixel.
       const box = el.getBoundingClientRect();
       const top = children[0].getBoundingClientRect().top;
       const bottom = children[children.length - 1].getBoundingClientRect().bottom;
-      if (bottom - top > box.height + 0.1) return true;
-      // Single lines only overflow sideways (their glyphs can poke a little above or below the
-      // line box at any size); a clamped title overflows when a line is cut off.
-      return [...el.querySelectorAll<HTMLElement>("[data-fit]")].some((line) =>
-        line.dataset.fit === "clamp"
-          ? line.scrollHeight > line.clientHeight + parseFloat(getComputedStyle(line).fontSize) * 0.4
-          : line.scrollWidth > line.clientWidth + 0.5,
-      );
+      return bottom - top > box.height + 0.1;
     };
     const run = () => {
-      let factor = 1;
+      const lines = [...el.querySelectorAll<HTMLElement>("[data-fit]")];
       el.style.setProperty("--fit", "1");
-      while (factor > MIN_FIT && overflows()) {
+      for (const line of lines) line.style.setProperty("--line", "1");
+      for (const line of lines) {
+        if (!lineOverflows(line)) continue;
+        // A single line's width scales with its font, so start close to the answer.
+        let factor = line.dataset.fit === "clamp" ? 0.93 : Math.max(MIN_LINE_FIT, Math.min(0.99, line.clientWidth / line.scrollWidth));
+        line.style.setProperty("--line", factor.toFixed(3));
+        while (factor > MIN_LINE_FIT && lineOverflows(line)) {
+          factor *= 0.95;
+          line.style.setProperty("--line", factor.toFixed(3));
+        }
+      }
+      // Shrinking the whole block keeps each line's share, so lines that fit above still fit.
+      let factor = 1;
+      while (factor > MIN_FIT && tooTall()) {
         factor *= 0.93;
         el.style.setProperty("--fit", factor.toFixed(3));
       }
@@ -203,7 +220,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
         {(brand || title) && (
           <div className="grid min-w-0" style={{ gap: fit(bodyMm * 0.1) }}>
             {brand && (
-              <div data-fit className="truncate" style={{ fontSize: fit(bodyMm), color: "#4a4a4a" }}>
+              <div data-fit className="truncate" style={{ fontSize: fitLine(bodyMm), color: "#4a4a4a" }}>
                 {brand}
               </div>
             )}
@@ -219,7 +236,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
                 <div
                   data-fit="clamp"
                   className="line-clamp-2 min-w-0 font-bold"
-                  style={{ fontSize: fit(titleMm), lineHeight: 1.08, letterSpacing: "-0.01em" }}
+                  style={{ fontSize: fitLine(titleMm), lineHeight: 1.08, letterSpacing: "-0.01em" }}
                 >
                   {title}
                 </div>
@@ -230,7 +247,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
         {details.length > 0 && (
           <div className="grid min-w-0" style={{ gap: fit(detailMm * 0.15) }}>
             {details.map((line, i) => (
-              <div key={i} data-fit className="truncate font-medium" style={{ fontSize: fit(detailMm) }}>
+              <div key={i} data-fit className="truncate font-medium" style={{ fontSize: fitLine(detailMm) }}>
                 {line}
               </div>
             ))}
@@ -239,7 +256,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
         {(footer || barMm > 0) && (
           <div className="grid min-w-0" style={{ gap: `${barGapMm}mm` }}>
             {footer && (
-              <div data-fit className="truncate" style={{ fontSize: fit(bodyMm), color: "#4a4a4a" }}>
+              <div data-fit className="truncate" style={{ fontSize: fitLine(bodyMm), color: "#4a4a4a" }}>
                 {footer}
               </div>
             )}
