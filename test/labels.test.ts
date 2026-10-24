@@ -32,7 +32,8 @@ describe("label config", () => {
   });
 
   test("old sheets without page padding still decode", () => {
-    const { pagePaddingMm: _, ...sheet } = LABEL_PRESETS.find((p) => p.id === "a4-3x8")!.sheet!;
+    const sheet: Partial<SheetLayout> = { ...LABEL_PRESETS.find((p) => p.id === "a4-3x8")!.sheet! };
+    delete sheet.pagePaddingMm;
     const decoded = decodeConfig(Buffer.from(JSON.stringify({ widthMm: 70, heightMm: 37, layout: {}, sheet })).toString("base64url"));
     expect(decoded?.sheet?.pagePaddingMm).toBe(0);
   });
