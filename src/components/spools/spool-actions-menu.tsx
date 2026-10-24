@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { loadSpoolAction } from "@/actions/printers";
+import { ColorSwatch } from "@/components/color-swatch";
 import { deleteSpoolAction, setSpoolStatusAction } from "@/actions/spools";
 import {
   AlertDialog,
@@ -48,8 +49,14 @@ export function SpoolActionsMenu({
   spoolId: number;
   filamentId: number;
   status: SpoolStatus;
-  /** Printers this spool can go on; `loadedTool` is set on the one it's on. */
-  printers?: { id: number; name: string; tools: number; loadedTool: number | null }[];
+  /** Printers this spool can go on; `loadedTool` is set on the one it's on, `slots` says what's on each tool. */
+  printers?: {
+    id: number;
+    name: string;
+    tools: number;
+    loadedTool: number | null;
+    slots?: { colorHex: string | null; name: string | null }[];
+  }[];
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -102,11 +109,20 @@ export function SpoolActionsMenu({
                   Load on {p.name}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  {Array.from({ length: p.tools }, (_, tool) => (
-                    <DropdownMenuItem key={tool} onSelect={() => load(p.id, tool, true)}>
-                      Tool {tool + 1}
-                    </DropdownMenuItem>
-                  ))}
+                  {Array.from({ length: p.tools }, (_, tool) => {
+                    const on = p.slots?.[tool];
+                    return (
+                      <DropdownMenuItem key={tool} onSelect={() => load(p.id, tool, true)}>
+                        {on?.name ? (
+                          <ColorSwatch hex={on.colorHex} className="size-4" />
+                        ) : (
+                          <span className="border-muted-foreground/40 size-4 shrink-0 rounded-full border-2 border-dashed" />
+                        )}
+                        <span className="font-medium tabular">T{tool + 1}</span>
+                        <span className="text-muted-foreground truncate">{on?.name ?? "Empty"}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             ) : (

@@ -110,7 +110,13 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
               spoolId={spool.id}
               filamentId={f.id}
               status={spool.status}
-              printers={printers.map((p) => ({ id: p.id, name: p.name, tools: p.tools, loadedTool: p.id === loadedOn?.id ? loadedTool : null }))}
+              printers={printers.map((p) => ({
+                id: p.id,
+                name: p.name,
+                tools: p.tools,
+                loadedTool: p.id === loadedOn?.id ? loadedTool : null,
+                slots: p.slots.map((s) => ({ colorHex: s.spool?.colorHex ?? null, name: s.spool ? s.spool.colorName || s.spool.filamentName : null })),
+              }))}
             />
           </div>
         </CardContent>
