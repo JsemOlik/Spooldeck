@@ -25,7 +25,9 @@ const ACCEPT = ".gcode,.bgcode,.gco,.g";
 const SKIP = "skip";
 
 function spoolLabel(s: SpoolOption) {
-  const name = [s.brandName, s.filamentName].filter(Boolean).join(" ");
+  // Imported Prusament filaments are already named "Prusament PLA …", so don't repeat the brand.
+  const hasBrand = !s.brandName || s.filamentName.toLowerCase().startsWith(s.brandName.toLowerCase());
+  const name = hasBrand ? s.filamentName : `${s.brandName} ${s.filamentName}`;
   const color = s.colorName && !name.toLowerCase().includes(s.colorName.toLowerCase()) ? ` · ${s.colorName}` : "";
   return `${name}${color} · ${formatGrams(s.remaining)} left · ${s.code}`;
 }
