@@ -9,6 +9,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { normalizePrinterUrl } from "@/lib/printers/http";
 import { gramsForLength } from "@/lib/weights";
 import { getLiveStatus, pollPrinter, printFileRead } from "@/server/printer-sync";
+import { getPrinterHistory } from "@/db/queries/printers";
 import { createPrinter, deletePrinter, listPrinters, loadSpool, updatePrinter } from "@/server/services/printers";
 import { POST as login } from "@/app/api/v1/auth/login/route";
 import { GET as listPrintersApi, POST as createPrinterApi } from "@/app/api/v1/printers/route";
@@ -226,6 +227,22 @@ describe("Moonraker printers", () => {
     expect((await entries(t0)).map((e) => [e.grams, e.note])).toEqual([[g(1300), "Printed on Stealthchanger"]]);
     expect((await entries(t1)).map((e) => [e.grams, e.note])).toEqual([[g(500), "Printed on Stealthchanger"]]);
 
+    // Both tools' entries are one print on the printer's page.
+    const [e0, e1] = [(await entries(t0))[0], (await entries(t1))[0]];
+    expect(e0.printerId).toBe(tc.id!);
+    expect(e0.printJob).toBeTruthy();
+    expect(e1.printJob).toBe(e0.printJob);
+    const history = await getPrinterHistory(tc.id!, "EUR");
+    expect(history).toMatchObject({ prints: 1, prints30: 1 });
+    expect(history.grams).toBeCloseTo(g(1300) + g(500), 5);
+    expect(history.recent).toHaveLength(1);
+    expect(history.recent[0]).toMatchObject({ name: "two colour", status: "printed" });
+    expect(history.recent[0].spools.map((s) => [s.id, s.grams])).toEqual([
+      [t0, g(1300)],
+      [t1, g(500)],
+    ]);
+    expect(history.days.at(-1)!.grams).toBeCloseTo(g(1800), 5);
+
     // Moving a spool to another tool takes it off the first one.
     await loadSpool(tc.id!, t0, 1);
     const view = (await listPrinters()).find((p) => p.id === tc.id)!;
@@ -234,6 +251,8 @@ describe("Moonraker printers", () => {
     await updatePrinter(tc.id!, { name: "Stealthchanger", url: MOONRAKER, tools: "1" });
     expect((await listPrinters()).find((p) => p.id === tc.id)!.slots).toEqual([{ tool: 0, spool: null, grams: null }]);
     await deletePrinter(tc.id!);
+    // The usage stays on the spools without the printer.
+    expect((await entries(t0)).map((e) => [e.grams, e.printerId])).toEqual([[g(1300), null]]);
   });
 
   describe("JSON API", () => {

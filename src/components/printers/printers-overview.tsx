@@ -25,7 +25,7 @@ export function PrintersOverview({ printers }: { printers: PrinterView[] }) {
             const spools = loaded.length === 1 ? spoolLabel(loaded[0]) : loaded.length ? `${loaded.length} spools loaded` : "No spool loaded";
             return (
             <li key={p.id}>
-              <Link href={loaded.length === 1 ? `/spools/${loaded[0].id}` : "/printers"} className="flex items-center gap-3 py-2">
+              <Link href={`/printers/${p.id}`} className="flex items-center gap-3 py-2">
                 <span className="flex shrink-0 -space-x-3">
                   {(loaded.length ? loaded : [null]).map((s, i) => (
                     <ColorSwatch key={s?.id ?? i} hex={s?.colorHex} className="ring-card size-7 ring-2" />

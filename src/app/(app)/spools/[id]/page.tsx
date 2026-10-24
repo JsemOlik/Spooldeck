@@ -77,7 +77,7 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
               </span>
             )}
             {loadedOn && (
-              <Link href="/printers" className="hover:text-foreground flex items-center gap-1">
+              <Link href={`/printers/${loadedOn.id}`} className="hover:text-foreground flex items-center gap-1">
                 <PrinterIcon className="size-3.5" />
                 On {toolLabel(loadedOn, loadedTool)} · {printerState(loadedOn).label}
               </Link>

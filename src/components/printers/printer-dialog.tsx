@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { deletePrinterAction, savePrinterAction } from "@/actions/printers";
@@ -75,6 +76,8 @@ function PrinterForm({ printer, onDone }: { printer?: Editable; onDone: () => vo
   const [clearKey, setClearKey] = useState(false);
   const k = KINDS[kind];
   const [deleting, startDelete] = useTransition();
+  const router = useRouter();
+  const pathname = usePathname();
   const fe = state.ok ? {} : (state.fieldErrors ?? {});
 
   return (
@@ -181,6 +184,8 @@ function PrinterForm({ printer, onDone }: { printer?: Editable; onDone: () => vo
                 if (result.ok) {
                   toast.success(result.message);
                   onDone();
+                  // Its own page is gone with it.
+                  if (pathname === `/printers/${printer.id}`) router.replace("/printers");
                 } else toast.error(result.error);
               });
             }}

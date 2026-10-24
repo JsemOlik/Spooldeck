@@ -18,7 +18,8 @@ import type { PrinterView } from "@/server/services/printers";
 
 type Loaded = (number | null)[];
 
-export function PrinterCard({ printer, spools }: { printer: PrinterView; spools: SpoolChoice[] }) {
+/** A printer's live status and loaded spools. On its own detail page the page header names it, so `header` is off. */
+export function PrinterCard({ printer, spools, header = true }: { printer: PrinterView; spools: SpoolChoice[]; header?: boolean }) {
   const [pending, startTransition] = useTransition();
   const [loaded, setLoaded] = useOptimistic<Loaded, { tool: number; spoolId: number | null }>(
     printer.slots.map((s) => s.spool?.id ?? null),
@@ -45,24 +46,30 @@ export function PrinterCard({ printer, spools }: { printer: PrinterView; spools:
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex min-w-0 items-start gap-3">
-          <PrinterIcon className="text-muted-foreground mt-0.5 size-5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <CardTitle className="truncate">{printer.name}</CardTitle>
-            <CardDescription className="truncate">{printer.url}</CardDescription>
+      {header && (
+        <CardHeader>
+          <div className="flex min-w-0 items-start gap-3">
+            <PrinterIcon className="text-muted-foreground mt-0.5 size-5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <CardTitle className="truncate">
+                <Link href={`/printers/${printer.id}`} className="hover:underline">
+                  {printer.name}
+                </Link>
+              </CardTitle>
+              <CardDescription className="truncate">{printer.url}</CardDescription>
+            </div>
+            <PrinterStateBadge printer={printer} />
+            <PrinterDialog
+              printer={printer}
+              trigger={
+                <Button variant="ghost" size="icon-sm" aria-label={`Edit ${printer.name}`} className="-mt-1">
+                  <PencilIcon />
+                </Button>
+              }
+            />
           </div>
-          <PrinterStateBadge printer={printer} />
-          <PrinterDialog
-            printer={printer}
-            trigger={
-              <Button variant="ghost" size="icon-sm" aria-label={`Edit ${printer.name}`} className="-mt-1">
-                <PencilIcon />
-              </Button>
-            }
-          />
-        </div>
-      </CardHeader>
+        </CardHeader>
+      )}
       <CardContent className="grid gap-4">
         {detail && <p className="text-destructive text-sm">{detail}</p>}
         {job && (
