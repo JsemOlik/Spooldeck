@@ -7,10 +7,10 @@ import { toast } from "sonner";
 import { logPrintAction } from "@/actions/spools";
 import { ColorSwatch } from "@/components/color-swatch";
 import { Field, FormError } from "@/components/forms/field";
+import { SpoolSelect } from "@/components/spools/spool-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatGrams } from "@/lib/format";
 import { DEFAULT_DENSITY, gramsFor, type SpoolCandidate, suggestSpools } from "@/lib/slicer/match";
 import { parseSlicedFile, type SliceInfo, SlicerParseError } from "@/lib/slicer/parse";
@@ -21,17 +21,6 @@ export type SpoolOption = SpoolCandidate & { code: string };
 type Row = { spoolId: number | null; grams: string; edited: boolean };
 
 const ACCEPT = ".gcode,.bgcode,.gco,.g";
-// Radix Select items can't have an empty value.
-const SKIP = "skip";
-
-function spoolLabel(s: SpoolOption) {
-  // Imported Prusament filaments are already named "Prusament PLA …", so don't repeat the brand.
-  const hasBrand = !s.brandName || s.filamentName.toLowerCase().startsWith(s.brandName.toLowerCase());
-  const name = hasBrand ? s.filamentName : `${s.brandName} ${s.filamentName}`;
-  const color = s.colorName && !name.toLowerCase().includes(s.colorName.toLowerCase()) ? ` · ${s.colorName}` : "";
-  return `${name}${color} · ${formatGrams(s.remaining)} left · ${s.code}`;
-}
-
 const gramsText = (n: number | null) => (n == null ? "" : String(n));
 
 export function PrintImport({ spools }: { spools: SpoolOption[] }) {
@@ -217,23 +206,13 @@ export function PrintImport({ spools }: { spools: SpoolOption[] }) {
               </div>
               <div className="grid items-start gap-3 sm:grid-cols-[1fr_8rem]">
                 <Field label="Spool" htmlFor={`spool-${i}`}>
-                  <Select
-                    value={row.spoolId ? String(row.spoolId) : SKIP}
-                    onValueChange={(v) => updateRow(i, { spoolId: v === SKIP ? null : Number(v) })}
-                  >
-                    <SelectTrigger id={`spool-${i}`} className="w-full min-w-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="max-w-(--radix-select-content-available-width)">
-                      <SelectItem value={SKIP}>Don&apos;t log this filament</SelectItem>
-                      {spools.map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)} className="*:[span]:last:min-w-0">
-                          <ColorSwatch hex={s.colorHex} className="size-4" />
-                          <span className="truncate">{spoolLabel(s)}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SpoolSelect
+                    id={`spool-${i}`}
+                    spools={spools}
+                    value={row.spoolId}
+                    onChange={(spoolId) => updateRow(i, { spoolId })}
+                    noneLabel="Don't log this filament"
+                  />
                 </Field>
                 <Field
                   label="Grams"
