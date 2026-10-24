@@ -4,7 +4,7 @@ import { getSpoolRows } from "@/db/queries/spools";
 import { type Printer, type PrinterKind, type PrinterMotion, printerSpools, printers, spools, usageLogs } from "@/db/schema";
 import { type ActionState, fromZodError } from "@/lib/action-state";
 import { printNameFromFile } from "@/lib/slicer/parse";
-import { nullify, printerSchema } from "@/lib/validation";
+import { type PrinterInput, nullify, printerSchema } from "@/lib/validation";
 import { forgetLiveStatus, getLiveStatus, pollPrinter } from "@/server/printer-sync";
 import type { Input } from "@/server/services/spools";
 
@@ -170,10 +170,13 @@ async function checkConnection(id: number): Promise<Pick<ActionState, "message">
 
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
+/** Brand, model, motion system and location; ones left out are cleared. */
+const detailColumns = ({ brand, model, motion, location }: PrinterInput) => nullify({ brand, model, motion, location });
+
 export async function createPrinter(input: Input): Promise<ActionState & { id?: number; online?: boolean }> {
   const parsed = printerSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
-  const { name, kind, url, username, apiKey, tools, ...details } = parsed.data;
+  const { name, kind, url, username, apiKey, tools } = parsed.data;
   const [row] = await db
     .insert(printers)
     .values({
@@ -183,7 +186,7 @@ export async function createPrinter(input: Input): Promise<ActionState & { id?: 
       username: kind === "prusalink" ? (username ?? null) : null,
       apiKey: apiKey ?? null,
       tools: tools ?? 1,
-      ...nullify(details),
+      ...detailColumns(parsed.data),
     })
     .returning({ id: printers.id });
   return { ok: true, id: row.id, ...(await checkConnection(row.id)) };
@@ -199,7 +202,7 @@ async function endJob(printer: Printer) {
 export async function updatePrinter(id: number, input: Input): Promise<ActionState & { online?: boolean }> {
   const parsed = printerSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);
-  const { name, kind, url, username, apiKey, clearApiKey, tools = 1, ...details } = parsed.data;
+  const { name, kind, url, username, apiKey, clearApiKey, tools = 1 } = parsed.data;
   const current = await db.query.printers.findFirst({ where: eq(printers.id, id) });
   if (!current) return { error: "Printer not found" };
   // Another kind of printer counts jobs differently, so a tracked print ends here.
@@ -215,7 +218,7 @@ export async function updatePrinter(id: number, input: Input): Promise<ActionSta
         username: kind === "prusalink" ? (username ?? null) : null,
         apiKey: apiKey ?? (clearApiKey === "on" ? null : current.apiKey),
         tools,
-        ...nullify(details),
+        ...detailColumns(parsed.data),
         ...(kindChanged ? { job: null } : {}),
       })
       .where(eq(printers.id, id));

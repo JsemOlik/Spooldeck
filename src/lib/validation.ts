@@ -119,6 +119,8 @@ export const printerSchema = z.object({
   location: optStr(100),
 });
 
+export type PrinterInput = z.infer<typeof printerSchema>;
+
 export const noteSchema = z.object({
   body: str(5000).min(1, "Write something first"),
   spoolId: optInt(1, Number.MAX_SAFE_INTEGER),

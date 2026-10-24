@@ -114,6 +114,15 @@ describe("Moonraker printers", () => {
     expect(res.fieldErrors?.url).toBeDefined();
   });
 
+  test("keeps the brand, model, motion system and location, and clears them when emptied", async () => {
+    const details = { brand: "Voron", model: "2.4 R2", motion: "corexy", location: "Garage" };
+    await updatePrinter(printerId, { name: "Voron", url: MOONRAKER, apiKey: "secret", ...details });
+    expect((await listPrinters()).find((p) => p.id === printerId)).toMatchObject(details);
+    expect((await updatePrinter(printerId, { name: "Voron", url: MOONRAKER, motion: "delta" })).fieldErrors?.motion).toBeDefined();
+    await updatePrinter(printerId, { name: "Voron", url: MOONRAKER });
+    expect((await listPrinters()).find((p) => p.id === printerId)).toMatchObject({ brand: null, model: null, motion: null, location: null });
+  });
+
   test("grows one usage entry while a print runs", async () => {
     expect(await loadSpool(printerId, spoolA)).toMatchObject({ ok: true });
     print("benchy_0.4n_0.2mm_PLA_MK4_1h2m.gcode", 1000);
