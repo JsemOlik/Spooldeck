@@ -87,7 +87,7 @@ Spooldeck is meant for one person, but it's built to survive being exposed to th
 - **Sessions:** random 256-bit tokens, stored hashed. The cookie is `httpOnly`, `SameSite=Lax`, and `Secure` behind HTTPS. Sessions slide over 30 days.
 - **Rate limiting:** failed logins back off exponentially per IP, with a global limit on top.
 - **Access checks:** every page, Server Action and API route (except the `/api/health` check) verifies the session server-side.
-- **API tokens:** the JSON API under `/api/v1` (used by the iOS app) takes `Authorization: Bearer <token>`. Tokens come from `POST /api/v1/auth/login`, are ordinary sessions, and are revoked by "Sign out everywhere" and password changes. See [docs/api.md](docs/api.md).
+- **API tokens:** the JSON API under `/api/v1` takes `Authorization: Bearer <token>`. Tokens come from `POST /api/v1/auth/login`, are ordinary sessions, and are revoked by "Sign out everywhere" and password changes. See [docs/api.md](docs/api.md).
 - **Prusament lookups:** only `prusament.com` URLs are fetched, which prevents SSRF.
 - **Search engines:** pages are `noindex`. Framing and camera use from other origins are blocked.
 
@@ -109,6 +109,22 @@ Open **Labels** to design one:
   - In the browser's print dialog, choose margins **None** and scale **100%**.
   - On a label printer, pick the matching paper size.
   - On a sticker sheet, use **Skip cells** to begin on a partly used sheet.
+
+## JSON API
+
+Everything the web interface does is also available as a JSON API under `/api/v1`, so you can log prints from a script, a home automation or your own app. Sign in once for a token and send it as a bearer token:
+
+```bash
+TOKEN=$(curl -s -X POST https://spools.example.com/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"username":"me","password":"…"}' | jq -r .token)
+
+curl -X POST https://spools.example.com/api/v1/spools/3/usage \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"grams":42.5,"printName":"Cable clips"}'
+```
+
+[docs/api.md](docs/api.md) lists every endpoint.
 
 ## Backup
 

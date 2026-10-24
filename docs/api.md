@@ -1,87 +1,128 @@
-# JSON API (`/api/v1`)
+# JSON API
 
-The iOS app talks to Spooldeck through this API. It wraps the same services the web UI's Server Actions use, so validation and behaviour match.
+Spooldeck has a JSON API under `/api/v1` for scripts, home automation, shortcuts and other apps. It can do everything the web interface does: list and add spools, log prints, weigh in, manage filaments and notes, resolve scanned codes and import Prusament spools.
 
-## Auth
+The API uses the same validation and logic as the web forms, so the rules and error messages are the same.
+
+## Quick start
+
+Sign in once to get a token, then send it as a bearer token:
 
 ```bash
-curl -X POST https://spools.example.com/api/v1/auth/login \
+TOKEN=$(curl -s -X POST https://spools.example.com/api/v1/auth/login \
   -H 'content-type: application/json' \
-  -d '{"username":"me","password":"…"}'
-# → {"token":"…","expiresAt":"…","user":{"id":1,"username":"me"}}
+  -d '{"username":"me","password":"…"}' | jq -r .token)
 
+# Every spool in stock
 curl https://spools.example.com/api/v1/spools -H "Authorization: Bearer $TOKEN"
+
+# Log a 42.5 g print on spool 3
+curl -X POST https://spools.example.com/api/v1/spools/3/usage \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"grams":42.5,"printName":"Cable clips"}'
 ```
 
-- A token is a regular session: it lasts 30 days and renews on use.
-- "Sign out everywhere" and changing the password revoke it.
-- Logins share the web login's rate limit.
+The login response looks like this:
 
-## Request and response shape
+```json
+{ "token": "…", "expiresAt": "2026-11-23T10:00:00.000Z", "user": { "id": 1, "username": "me" } }
+```
 
-- Request bodies are JSON. Numbers can be sent as numbers or strings, and `null` or `""` means "not set". Field names match the web forms.
-- Errors return `{ "error": "…", "fieldErrors": { "field": ["…"] } }`.
-  - 400: validation failed
-  - 401: missing or invalid token
-  - 404: not found
-  - 409: the request conflicts with existing data
-  - 422: Prusament lookup failed
-- Dates are ISO 8601. Day-only fields such as `purchaseDate` are `YYYY-MM-DD`.
+## Tokens
+
+- A token is an ordinary login session. It lasts 30 days and every request extends it, so a script that runs regularly stays signed in.
+- Tokens count toward the active sessions shown in **Settings**. **Sign out everywhere** and changing your password revoke them all.
+- Store tokens like passwords. Anyone holding one has full access to your data.
+- Logins share the web login's rate limit. Call `auth/login` once and reuse the token instead of signing in for every request.
+- Before the account exists, `auth/login` returns 409. Finish the setup in the browser first.
+
+## Requests and responses
+
+- **Bodies** are JSON. Numbers can be sent as numbers or strings, and `null` or `""` means "not set". Field names match the web forms.
+- **Brands, materials and vendors** are passed by name (`"brand": "Prusament"`). A name that doesn't exist yet is added to the catalog.
+- **Dates** are ISO 8601 timestamps. Day-only fields such as `purchaseDate` use `YYYY-MM-DD`.
+- **Weights** are grams; prices use the currency from settings unless a spool has its own `currency`.
+- **Errors** return a message and, for validation errors, the failing fields:
+
+  ```json
+  { "error": "Please fix the highlighted fields.", "fieldErrors": { "grams": ["Enter the grams used"] } }
+  ```
+
+| Status | Meaning                                          |
+| ------ | ------------------------------------------------ |
+| 200    | OK                                               |
+| 201    | Created                                          |
+| 400    | Validation failed, or the body isn't valid JSON  |
+| 401    | Missing, invalid or expired token                |
+| 404    | No such item                                     |
+| 409    | The request conflicts with existing data         |
+| 422    | The Prusament page couldn't be read              |
+| 500    | Something went wrong on the server; see its logs |
 
 ## Endpoints
 
-### Auth and account
+All paths are relative to `/api/v1`.
 
-| Method | Path | Notes |
-|---|---|---|
-| POST | `auth/login` | Takes `{username, password}` and returns a token. |
-| POST | `auth/logout` | Ends the current session. |
-| POST | `auth/logout-everywhere` | Ends all sessions. |
-| POST | `auth/password` | Takes `{current, password, confirm}`. Returns a new token. |
-| GET | `me` | Returns `{id, username, sessionCount}`. |
+### Account
+
+| Method | Path                     | Body / query                  | Notes                                                       |
+| ------ | ------------------------ | ----------------------------- | ----------------------------------------------------------- |
+| POST   | `auth/login`             | `{username, password}`        | Returns `{token, expiresAt, user}`. No token needed.        |
+| POST   | `auth/logout`            |                               | Revokes the token used for this request.                    |
+| POST   | `auth/logout-everywhere` |                               | Revokes every session and token, including this one.        |
+| POST   | `auth/password`          | `{current, password, confirm}` | Signs out everywhere and returns a new `{token, expiresAt}`. |
+| GET    | `me`                     |                               | `{id, username, sessionCount}`                              |
 
 ### Spools and usage
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `dashboard` | Stats, low stock, recent prints, usage by material. |
-| GET | `spools` | Query: `q`, `materialId`, `brandId`, `filamentId`, `status`, `location`, `sort`, `low=1`. |
-| POST | `spools` | New spool form fields, plus `quantity` and `remaining`. |
-| GET | `spools/{id}` | Spool with filament, usage, `filamentNotes` and `qrUrl`. |
-| PUT | `spools/{id}` | Updates the spool. |
-| DELETE | `spools/{id}` | Deletes the spool. |
-| POST | `spools/{id}/status` | Takes `{status}`. |
-| POST | `spools/{id}/usage` | Takes `{grams, printName?, note?}`. |
-| POST | `spools/{id}/weigh-in` | Takes `{grams, includesSpool, note?}`. |
-| GET | `spools/by-code/{code}` | Returns `{id}`. |
-| DELETE | `usage/{id}` | Deletes a usage entry. |
+| Method | Path                    | Body / query                                                                                         | Notes                                                                                    |
+| ------ | ----------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| GET    | `dashboard`             |                                                                                                      | Totals, low stock, recent prints and usage by material, plus `currency` and `lowStockGrams`. |
+| GET    | `spools`                | `q`, `materialId`, `brandId`, `filamentId`, `location`, `status`, `sort`, `low=1`                     | `status`: `active` (default), `all`, `sealed`, `opened`, `empty`, `archived`. `sort`: `name`, `remaining`, `recent`, `used`. |
+| POST   | `spools`                | Spool fields (below), plus `quantity` (1–50) and `remaining`                                        | Adds one or more identical spools. Returns `{ids, filamentId}`.                           |
+| GET    | `spools/{id}`           |                                                                                                      | The spool with its filament, usage history, the latest five filament notes and `qrUrl`. |
+| PUT    | `spools/{id}`           | Spool fields                                                                                         | Replaces the spool's fields.                                                             |
+| DELETE | `spools/{id}`           |                                                                                                      | Deletes the spool and its usage history.                                                 |
+| POST   | `spools/{id}/status`    | `{status}`                                                                                           | `sealed`, `opened`, `empty` or `archived`.                                                |
+| POST   | `spools/{id}/usage`     | `{grams, printName?, note?}`                                                                         | Logs filament used by a print.                                                           |
+| POST   | `spools/{id}/weigh-in`  | `{scaleGrams, includesSpool?, note?}`                                                                | Sets the remaining weight from a scale reading. With `includesSpool: true`, the empty spool weight is subtracted. |
+| GET    | `spools/by-code/{code}` |                                                                                                      | Looks up a spool by the code on its label. Returns `{id}`.                               |
+| DELETE | `usage/{id}`            |                                                                                                      | Deletes a usage entry, adding its grams back to the spool.                               |
+
+**Spool fields:** `filamentId` and `initialWeight` (grams of filament, without the spool) are required. Optional: `spoolWeight`, `price`, `currency`, `vendor`, `purchaseDate`, `purchaseUrl`, `location`, `status`, `notes`.
 
 ### Filaments and notes
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `filaments` | Add `archived=1` to list archived filaments. |
-| POST | `filaments` | Creates a filament. |
-| GET, PUT, DELETE | `filaments/{id}` | Read, update or delete a filament. |
-| GET | `filaments/options` | Options for the spool form's filament picker. |
-| POST | `filaments/{id}/archive` | Takes `{archived}`. |
-| POST | `filaments/{id}/notes` | Takes `{body, spoolId?}`. |
-| DELETE | `notes/{id}` | Deletes a note. |
+| Method | Path                     | Body / query                               | Notes                                                     |
+| ------ | ------------------------ | ------------------------------------------ | --------------------------------------------------------- |
+| GET    | `filaments`              | `q`, `materialId`, `brandId`, `archived=1` | Filaments with stock totals.                              |
+| POST   | `filaments`              | Filament fields (below)                    | Returns the new filament's `id`.                          |
+| GET    | `filaments/{id}`         |                                            | The filament with its brand, material, spools and notes.  |
+| PUT    | `filaments/{id}`         | Filament fields                            |                                                           |
+| DELETE | `filaments/{id}`         |                                            | Only works when the filament has no spools; returns 409 otherwise. |
+| GET    | `filaments/options`      |                                            | A short list for pickers: name, color, brand, material and default weights. |
+| POST   | `filaments/{id}/archive` | `{archived}`                               | Hides or shows the filament in lists.                     |
+| POST   | `filaments/{id}/notes`   | `{body, spoolId?}`                         | Adds a dated note, optionally tied to one spool.          |
+| DELETE | `notes/{id}`             |                                            |                                                           |
 
-### Scanning and Prusament import
+**Filament fields:** `name` is required. Optional: `brand`, `material`, `colorName`, `colorHex` (`#rrggbb`), `diameter`, `nominalWeight`, `spoolWeight`, `nozzleMin`, `nozzleMax`, `bedMin`, `bedMax`, `dryingTemp`, `dryingHours`, `maxSpeed`, `fan`, `productUrl`, `imageUrl`, `rating` (1–5).
 
-| Method | Path | Notes |
-|---|---|---|
-| POST | `scan/resolve` | Takes `{text}`. Returns `{kind:"spool",id}`, `{kind:"prusament",url}` or `{kind:"error",error}`. |
-| GET | `prusament/preview?url=` | Previews a Prusament spool before importing it. |
-| POST | `prusament/import` | Imports a Prusament spool. |
+### Scanning and Prusament
+
+| Method | Path                     | Body / query                                                            | Notes                                                                                     |
+| ------ | ------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| POST   | `scan/resolve`           | `{text}`                                                                | Works out what a scanned QR code points to: `{kind: "spool", id}`, `{kind: "prusament", url}` or `{kind: "error", error}`. |
+| GET    | `prusament/preview`      | `url`                                                                   | What importing this Prusament spool would create, read from prusament.com.              |
+| POST   | `prusament/import`       | `{url, price?, currency?, vendor?, purchaseDate?, location?, notes?, remaining?}` | Imports the spool. If it already exists, returns `{id, existing: true}` instead.          |
 
 ### Settings, catalog and locations
 
-| Method | Path | Notes |
-|---|---|---|
-| GET, PUT | `settings` | `currency`, `lowStockGrams`, `publicUrl`. GET also returns `detectedUrl`. |
-| GET, POST | `catalog/{brands\|vendors\|materials}` | List or create catalog items. |
-| PUT, DELETE | `catalog/{kind}/{id}` | Update or delete a catalog item. |
-| GET | `locations` | Locations with spool counts. |
-| POST | `locations/rename` | Takes `{from, name}`. |
+| Method      | Path                                     | Body / query                         | Notes                                                                  |
+| ----------- | ---------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| GET, PUT    | `settings`                               | `{currency, lowStockGrams, publicUrl}` | GET also returns `detectedUrl`, the address the server sees requests on. |
+| GET, POST   | `catalog/brands`, `catalog/vendors`, `catalog/materials` | `{name, …}`                | Lists items with usage counts, or adds one.                            |
+| PUT, DELETE | `catalog/{kind}/{id}`                    | `{name, …}`                          | Deleting an item clears it from filaments and spools that used it.     |
+| GET         | `locations`                              |                                      | Storage locations with spool counts.                                   |
+| POST        | `locations/rename`                       | `{from, name}`                       | Renames a location on every spool. An empty `name` clears it.          |
+
+Catalog fields: brands take `name` and `website`; vendors take `name`, `url` and `notes`; materials take `name`, `density` (g/cm³), `nozzleMin`, `nozzleMax`, `bedMin`, `bedMax` and `notes`.
