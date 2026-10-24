@@ -1,6 +1,7 @@
+/** A positive id that fits Postgres's integer columns, so a made-up one can't make a query fail. */
 export function intParam(v: string | string[] | undefined) {
   const n = Number(Array.isArray(v) ? v[0] : v);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
+  return Number.isInteger(n) && n > 0 && n <= 2_147_483_647 ? n : undefined;
 }
 
 export function strParam(v: string | string[] | undefined) {
