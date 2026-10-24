@@ -129,8 +129,8 @@ Spooldeck can follow your printers and take the filament off the loaded spools w
 1. Open **Printers → Add printer**, pick the type and enter the address:
    - **Klipper:** the address you open Mainsail or Fluidd on usually works; otherwise use the printer's IP with port 7125, e.g. `http://192.168.1.50:7125`.
    - **Prusa:** turn on PrusaLink on the printer, then enter its IP address and the username and password shown in its network settings (the username is usually `maker`).
-2. Set **Tools** to the number of toolheads (an XL, a toolchanger, an INDX) or MMU slots. Each tool holds its own spool.
-3. Pick the spool that's loaded on each tool. You can also do this from a spool's **⋯** menu, so scanning the label on the spool you just put on is enough.
+2. Set **Tools** to the number of toolheads (an XL, a toolchanger, or an INDX, Prusa's toolchanger) or MMU slots. Each tool holds its own spool.
+3. Pick the spool that's loaded on each tool. A printer with several tools shows them in a row, T1 to the last, each in the colour of its spool, so you can match them to the printer at a glance. Click one to pick its spool. You can also do this from a spool's **⋯** menu, so scanning the label on the spool you just put on is enough.
 4. Print as usual. The printer card, the dashboard and the spool page update on their own every few seconds.
 
 Click a printer's name to open its page. It shows the live status and loaded spools, plus what the printer has printed: totals and filament cost, a chart of the grams used per day over the last 30 days, the recent prints with the spools each one used, and the filaments it goes through most. A print that used several tools or spools is one row.
