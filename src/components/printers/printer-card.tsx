@@ -8,12 +8,12 @@ import { loadSpoolAction } from "@/actions/printers";
 import { Field } from "@/components/forms/field";
 import { PrinterDialog } from "@/components/printers/printer-dialog";
 import { PrinterStateBadge, printerState } from "@/components/printers/printer-status";
+import { ToolStrip } from "@/components/printers/tool-strip";
 import { type SpoolChoice, SpoolSelect } from "@/components/spools/spool-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatGrams } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { PrinterView } from "@/server/services/printers";
 
 type Loaded = (number | null)[];
@@ -27,7 +27,8 @@ export function PrinterCard({ printer, spools, header = true }: { printer: Print
     (current, { tool, spoolId }) => current.map((id, t) => (t === tool ? spoolId : id === spoolId ? null : id)),
   );
   const { detail } = printerState(printer);
-  const progress = printer.live?.state === "printing" || printer.live?.state === "paused" ? printer.live.progress : null;
+  const printing = printer.live?.state === "printing" || printer.live?.state === "paused";
+  const progress = printing ? printer.live!.progress : null;
   const multi = printer.tools > 1;
   const anyLoaded = printer.slots.some((s) => s.spool);
   // Loaded spools may be empty or archived by now, so they aren't always in the stock list.
@@ -84,22 +85,35 @@ export function PrinterCard({ printer, spools, header = true }: { printer: Print
             <p className="text-muted-foreground text-xs">{jobHint(printer, anyLoaded)}</p>
           </div>
         )}
-        <div className={cn("grid gap-4", multi && "sm:grid-cols-2")}>
-          {printer.slots.map((slot) => {
+        {multi ? (
+          <ToolStrip
+            tools={printer.slots.map((slot) => {
+              const spool = choices.find((c) => c.id === loaded[slot.tool]) ?? null;
+              return {
+                tool: slot.tool,
+                spool,
+                // Until the server catches up with a swap, the old spool's grams don't belong to the new one.
+                grams: spool && spool.id === slot.spool?.id ? slot.grams : null,
+                active: printing && printer.live?.tool === slot.tool,
+              };
+            })}
+            spools={choices}
+            onLoad={load}
+            disabled={pending}
+          />
+        ) : (
+          printer.slots.map((slot) => {
             const id = `printer-${printer.id}-tool-${slot.tool}`;
             return (
               <Field
                 key={slot.tool}
-                label={multi ? `Tool ${slot.tool + 1}` : "Loaded spool"}
+                label="Loaded spool"
                 htmlFor={id}
                 hint={
                   slot.spool && (
-                    <>
-                      <Link href={`/spools/${slot.spool.id}`} className="text-primary hover:underline">
-                        Open spool · {formatGrams(Math.max(0, slot.spool.remaining), { precise: true })} left →
-                      </Link>
-                      {multi && slot.grams != null && <> · {formatGrams(slot.grams, { precise: true })} this print</>}
-                    </>
+                    <Link href={`/spools/${slot.spool.id}`} className="text-primary hover:underline">
+                      Open spool · {formatGrams(Math.max(0, slot.spool.remaining), { precise: true })} left →
+                    </Link>
                   )
                 }
               >
@@ -113,8 +127,8 @@ export function PrinterCard({ printer, spools, header = true }: { printer: Print
                 />
               </Field>
             );
-          })}
-        </div>
+          })
+        )}
       </CardContent>
     </Card>
   );

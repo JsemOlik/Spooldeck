@@ -42,6 +42,8 @@ export type PrinterView = {
     state: string | null;
     filename: string | null;
     progress: number | null;
+    /** The tool extruding now, when the printer says (Klipper toolchangers). */
+    tool: number | null;
     message: string | null;
     error: string | null;
     checkedAt: Date;
@@ -116,6 +118,7 @@ export async function listPrinters(): Promise<PrinterView[]> {
         state: live.status?.state ?? null,
         filename: live.status?.filename || null,
         progress: live.status?.progress ?? null,
+        tool: live.status?.tool ?? null,
         message: live.status?.message || null,
         error: live.error,
         checkedAt: live.checkedAt,
