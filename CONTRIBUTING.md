@@ -49,7 +49,7 @@ Live camera scanning needs HTTPS or `localhost`. To try it on your phone, expose
 | `src/app/`           | Routes (App Router). `(app)` is everything behind login, `(auth)` login/setup. |
 | `src/actions/`       | Server Actions, one file per area. All mutations go through these.             |
 | `src/db/schema.ts`   | Drizzle schema. `src/db/queries/` holds the read queries used by pages.        |
-| `src/server/`        | `services/` holds the mutations shared by Server Actions and the JSON API. `printer-sync.ts` is the background loop that polls Klipper printers. |
+| `src/server/`        | `services/` holds the mutations shared by Server Actions and the JSON API. `printer-sync.ts` is the background loop that polls printers; the Moonraker and PrusaLink clients are in `src/lib/printers/`. |
 | `src/lib/`           | Logic without UI: Prusament import, G-code parsing, the Moonraker client, weights and costs, backups. |
 | `src/lib/auth/`      | Password hashing, sessions and `requireUser()`.                                |
 | `src/components/ui/` | shadcn/ui building blocks. Feature components sit in sibling folders.          |

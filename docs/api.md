@@ -111,34 +111,43 @@ curl -X POST https://spools.example.com/api/v1/prints \
 
 ### Printers
 
-Klipper printers that Spooldeck follows through Moonraker. While a printer prints, the usage of the loaded spool is updated every few seconds without any API calls; these endpoints manage the printers and the loaded spool.
+Klipper printers (through Moonraker) and Prusa printers (through PrusaLink) that Spooldeck follows. While a printer prints, the usage of its loaded spools is updated every few seconds without any API calls; these endpoints manage the printers and which spool is on which tool.
 
 | Method | Path                  | Body / query                     | Notes                                                                                                    |
 | ------ | --------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| GET    | `printers`            |                                  | Every printer with its loaded `spool`, `live` status and current `job`.                                  |
-| POST   | `printers`            | `{name, url, apiKey?}`           | Adds a printer and tries to connect right away. Returns `{id, online, message}`.                         |
+| GET    | `printers`            |                                  | Every printer with its `slots`, `live` status and current `job`.                                         |
+| POST   | `printers`            | Printer fields (below)           | Adds a printer and tries to connect right away. Returns `{id, online, message}`.                         |
 | GET    | `printers/{id}`       |                                  | One printer, shaped like the list entries.                                                               |
-| PUT    | `printers/{id}`       | `{name, url, apiKey?}`           | Leave `apiKey` out to keep the saved key, or send `null` to remove it. Returns `{online, message}`.      |
+| PUT    | `printers/{id}`       | Printer fields                   | Leave `apiKey` out to keep the saved key or password, or send `null` to remove it. Returns `{online, message}`. |
 | DELETE | `printers/{id}`       |                                  | Usage already logged stays on the spools.                                                                |
-| POST   | `printers/{id}/spool` | `{spoolId}`                      | Loads a spool on the printer, or unloads it with `null`. A spool is on one printer at a time, so it comes off any other. |
+| POST   | `printers/{id}/spool` | `{spoolId, tool?}`               | Loads a spool on a tool (0-based, default 0), or unloads the tool with `spoolId: null`. A spool is in one place at a time, so it comes off any other printer or tool. |
 
-`url` is Moonraker's address; a missing `http://` is added. The API key is never returned; `hasApiKey` says whether one is saved. A printer looks like this:
+**Printer fields:** `name` and `url` are required; a missing `http://` is added to `url`. Optional: `kind` (`moonraker`, the default, or `prusalink`), `username` (PrusaLink's, usually `maker`; without one the password is sent as an API key), `apiKey` (Moonraker's API key, or PrusaLink's password) and `tools` (1–16, default 1: toolheads or MMU slots). Lowering `tools` unloads the spools on the tools that went.
+
+The key or password is never returned; `hasApiKey` says whether one is saved. A printer looks like this:
 
 ```json
 {
   "id": 1,
-  "name": "Voron",
-  "url": "http://voron.local:7125",
-  "hasApiKey": false,
-  "spool": { "id": 3, "code": "4Y24FJ", "filamentName": "Prusament PLA Galaxy Black", "colorName": "Galaxy Black", "colorHex": "#3d3e3d", "brandName": "Prusament", "materialName": "PLA", "remaining": 812.4 },
-  "live": { "online": true, "state": "printing", "filename": "benchy.gcode", "progress": 0.42, "message": null, "error": null, "checkedAt": "2026-10-24T13:36:00.000Z" },
-  "job": { "printName": "benchy", "usageId": 57, "grams": 6.3 }
+  "name": "XL",
+  "kind": "prusalink",
+  "url": "http://192.168.1.50",
+  "username": "maker",
+  "hasApiKey": true,
+  "tools": 2,
+  "slots": [
+    { "tool": 0, "spool": { "id": 3, "code": "4Y24FJ", "filamentName": "Prusament PLA Galaxy Black", "colorName": "Galaxy Black", "colorHex": "#3d3e3d", "brandName": "Prusament", "materialName": "PLA", "remaining": 812.4 }, "grams": 5.1 },
+    { "tool": 1, "spool": null, "grams": null }
+  ],
+  "live": { "online": true, "state": "printing", "filename": "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", "progress": 0.42, "message": null, "error": null, "checkedAt": "2026-10-24T13:36:00.000Z" },
+  "job": { "printName": "Cube", "grams": 5.1, "usage": "counting" }
 }
 ```
 
+- `slots` has one entry per tool, with the spool on it and the grams it has used in the current print (null when it has no usage entry in it).
 - `live` is null until the printer has been polled once. When it can't be reached, `online` is false and `error` says why.
-- `state` is Klipper's: `standby`, `printing`, `paused`, `complete`, `cancelled` or `error`.
-- `job` is the print being tracked, with the grams taken off the loaded spool so far and the usage entry they're in. It's null when nothing is printing.
+- `state` is one of `standby`, `printing`, `paused`, `complete`, `cancelled` or `error`.
+- `job` is the print being tracked, with the grams taken off its spools so far. It's null when nothing is printing. On a Prusa, `usage` is `reading` while the print file is being read and `missing` when the file has no usage stats (it wasn't sliced in PrusaSlicer); otherwise it's `counting`.
 
 ### Filaments and notes
 
