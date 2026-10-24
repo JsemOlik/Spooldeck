@@ -5,7 +5,7 @@ import { getSpoolsForLabels } from "@/db/queries/spools";
 import { requireUser } from "@/lib/auth/dal";
 import { getBaseUrl } from "@/lib/base-url";
 import { decodeConfig, PAGE_SIZES_MM, type LabelConfig } from "@/lib/labels/config";
-import { buildLabelData, type LabelData } from "@/lib/labels/data";
+import { buildLabelData, buildPrinterLabelData, getPrintersForLabels, type LabelData } from "@/lib/labels/data";
 import { idListParam, intParam } from "@/lib/params";
 import { getAppSettings } from "@/lib/settings";
 
@@ -16,14 +16,15 @@ export default async function PrintLabelsPage({ searchParams }: PageProps<"/labe
   const sp = await searchParams;
   const config = decodeConfig(Array.isArray(sp.c) ? sp.c[0] : sp.c);
   const ids = idListParam(sp.spools);
+  const printerIds = idListParam(sp.printers);
   const copies = Math.min(intParam(sp.copies) ?? 1, 50);
   const skip = intParam(sp.skip) ?? 0;
 
-  if (!config || ids.length === 0) {
+  if (!config || ids.length + printerIds.length === 0) {
     return (
       <main className="mx-auto max-w-md p-8 text-center">
         <h1 className="text-lg font-semibold">Nothing to print</h1>
-        <p className="text-muted-foreground mt-2 text-sm">Open the label designer, select spools and press Print.</p>
+        <p className="text-muted-foreground mt-2 text-sm">Open the label designer, select spools or printers and press Print.</p>
         <a href="/labels" className="text-primary mt-4 inline-block text-sm hover:underline">
           Go to labels
         </a>
@@ -31,13 +32,21 @@ export default async function PrintLabelsPage({ searchParams }: PageProps<"/labe
     );
   }
 
-  const [rows, baseUrl, settings] = await Promise.all([getSpoolsForLabels(ids), getBaseUrl(), getAppSettings()]);
+  const [rows, printers, baseUrl, settings] = await Promise.all([
+    getSpoolsForLabels(ids),
+    getPrintersForLabels(printerIds),
+    getBaseUrl(),
+    getAppSettings(),
+  ]);
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const data = await buildLabelData(
-    ids.flatMap((id) => byId.get(id) ?? []),
-    baseUrl,
-    settings.currency,
-  );
+  const data: LabelData[] = [
+    ...(await buildLabelData(
+      ids.flatMap((id) => byId.get(id) ?? []),
+      baseUrl,
+      settings.currency,
+    )),
+    ...(await buildPrinterLabelData(printers, baseUrl)),
+  ];
   const labels = data.flatMap((d) => Array.from({ length: copies }, () => d));
 
   const { widthMm: w, heightMm: h, sheet } = config;

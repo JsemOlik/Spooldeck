@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef } from "react";
 import type { LabelData } from "@/lib/labels/data";
-import type { LabelConfig } from "@/lib/labels/config";
+import type { LabelConfig, LabelLayout, PrinterLabelField } from "@/lib/labels/config";
 
 const MIN_FIT = 0.3;
 
@@ -68,10 +68,11 @@ function isDark(hex: string) {
 }
 
 /**
- * Spooldeck's spool on a tile of the filament's colour, for the middle of the QR code. The white
- * margin keeps it apart from the modules around it; the code's high error correction covers it.
+ * Spooldeck's spool on a tile of the filament's colour (or a printer on black, on a printer's label),
+ * for the middle of the QR code. The white margin keeps it apart from the modules around it; the
+ * code's high error correction covers it.
  */
-function QrLogo({ color }: { color: string | null }) {
+function QrLogo({ color, printer }: { color: string | null; printer?: boolean }) {
   const tile = color ?? "#000000";
   // The spool is black on light colours and white on dark ones, the hub the opposite.
   const [spool, hub] = isDark(tile) ? ["#ffffff", "#000000"] : ["#000000", "#ffffff"];
@@ -79,24 +80,62 @@ function QrLogo({ color }: { color: string | null }) {
     <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
       <rect width="32" height="32" rx="7" fill="#ffffff" />
       <rect x="2.5" y="2.5" width="27" height="27" rx="5.5" fill={tile} />
-      <circle cx="16" cy="16" r="9.6" fill={spool} />
-      <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
-      <circle cx="16" cy="16" r="2.7" fill={hub} />
+      {printer ? (
+        <g fill="none" stroke={spool} strokeWidth="1.8" strokeLinejoin="round">
+          <rect x="8.5" y="7.5" width="15" height="17" rx="1.5" />
+          <path d="M8.5 11.5h15M11 19.5h10" />
+          <rect x="14" y="10" width="4" height="4" rx="0.8" fill={spool} />
+        </g>
+      ) : (
+        <>
+          <circle cx="16" cy="16" r="9.6" fill={spool} />
+          <circle cx="16" cy="16" r="6" fill="none" stroke={hub} strokeWidth="1.6" strokeDasharray="2.1 1.6" />
+          <circle cx="16" cy="16" r="2.7" fill={hub} />
+        </>
+      )}
     </svg>
   );
 }
 
+/** The label's lines of text, from the fields the layout shows. */
+function labelText(data: LabelData, layout: LabelLayout) {
+  if (data.kind === "printer") {
+    const v = data.values;
+    const has = (f: PrinterLabelField) => layout.printerFields.includes(f) && !!v[f];
+    // The model gets a line of its own: "Brand Model" on the brand's short line would shrink everything.
+    return {
+      brand: has("brand") ? v.brand : undefined,
+      title: data.name,
+      footer: has("location") ? v.location! : "",
+      tempParts: [] as string[],
+      extra: [has("model") && v.model, [has("motion") && v.motion, has("tools") && v.tools].filter(Boolean).join(" · ")].filter(Boolean) as string[],
+    };
+  }
+  const v = data.values;
+  const has = (f: (typeof layout.fields)[number]) => layout.fields.includes(f) && !!v[f];
+  return {
+    brand: has("brand") ? v.brand : undefined,
+    title: (has("colorName") && v.colorName) || (has("filamentName") && v.filamentName) || v.colorName || v.filamentName,
+    footer: [has("material") && v.material, has("code") && `#${data.code}`].filter(Boolean).join(" · "),
+    tempParts: [has("nozzle") && `Nozzle ${v.nozzle}`, has("bed") && `Bed ${v.bed}`].filter(Boolean) as string[],
+    extra: [
+      has("filamentName") && has("colorName") ? v.filamentName : null,
+      [has("diameter") && v.diameter, has("weight") && v.weight].filter(Boolean).join(" · "),
+      [has("vendor") && v.vendor, has("price") && v.price].filter(Boolean).join(" · "),
+      [has("purchaseDate") && v.purchaseDate, has("location") && v.location].filter(Boolean).join(" · "),
+    ].filter(Boolean) as string[],
+  };
+}
+
 /**
- * A single physical label, sized in millimetres. The QR code and title are black on white;
- * the brand and footer are dark grey, and the colour bar and logo print in the filament's
- * colour (or as grey on a thermal printer).
+ * A single physical label, for a spool or a printer, sized in millimetres. The QR code and title
+ * are black on white; the brand and footer are dark grey, and the colour bar and logo print in the
+ * filament's colour (or as grey on a thermal printer).
  */
 export function LabelView({ data, config }: { data: LabelData; config: Pick<LabelConfig, "widthMm" | "heightMm" | "layout"> }) {
   const textRef = useFitText();
   const { widthMm: w, heightMm: h, layout } = config;
   const pad = layout.paddingMm;
-  const has = (f: (typeof layout.fields)[number]) => layout.fields.includes(f) && !!data.values[f];
-  const v = data.values;
   const color = data.colorHex;
 
   // The colour band gets its own strip of the label so it never overlaps the QR code or text,
@@ -117,16 +156,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
   const textH = vertical && qrMm > 0 ? innerH - qrMm - gapMm : innerH;
   const logo = layout.qrLogo && qrMm >= 8;
 
-  const title = (has("colorName") && v.colorName) || (has("filamentName") && v.filamentName) || v.colorName || v.filamentName;
-  const brand = has("brand") ? v.brand : undefined;
-  const footer = [has("material") && v.material, has("code") && `#${data.code}`].filter(Boolean).join(" · ");
-  const tempParts = [has("nozzle") && `Nozzle ${v.nozzle}`, has("bed") && `Bed ${v.bed}`].filter(Boolean) as string[];
-  const extra = [
-    has("filamentName") && has("colorName") ? v.filamentName : null,
-    [has("diameter") && v.diameter, has("weight") && v.weight].filter(Boolean).join(" · "),
-    [has("vendor") && v.vendor, has("price") && v.price].filter(Boolean).join(" · "),
-    [has("purchaseDate") && v.purchaseDate, has("location") && v.location].filter(Boolean).join(" · "),
-  ].filter(Boolean) as string[];
+  const { brand, title, footer, tempParts, extra } = labelText(data, layout);
 
   // The bar is a fixed size; the text shares what's left.
   const barMm = layout.colorBar && color ? Math.min(7, Math.max(1.5, textH * 0.17)) : 0;
@@ -169,7 +199,7 @@ export function LabelView({ data, config }: { data: LabelData; config: Pick<Labe
       {qrMm > 0 && (
         <div className="relative shrink-0 self-center" style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}>
           <div className="size-full [&>svg]:block [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: logo ? data.qrLogoSvg : data.qrSvg }} />
-          {logo && <QrLogo color={color} />}
+          {logo && <QrLogo color={color} printer={data.kind === "printer"} />}
         </div>
       )}
       <div

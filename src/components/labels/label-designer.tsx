@@ -11,6 +11,7 @@ import {
 import { ColorSwatch } from "@/components/color-swatch";
 import { Field } from "@/components/forms/field";
 import { LabelView } from "@/components/labels/label-view";
+import { MotionIcon } from "@/components/printers/motion-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,18 +19,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   encodeConfig,
   LABEL_FIELD_LABELS,
   LABEL_FIELDS,
   LABEL_PRESETS,
   PAGE_SIZES_MM,
+  PRINTER_LABEL_FIELD_LABELS,
+  PRINTER_LABEL_FIELDS,
   type LabelConfig,
   type LabelField,
   type LabelLayout,
+  type LabelSubject,
+  type PrinterLabelField,
   type SheetLayout,
 } from "@/lib/labels/config";
-import type { LabelData } from "@/lib/labels/data";
+import type { PrinterLabelData, SpoolLabelData } from "@/lib/labels/data";
 
 export type TemplateOption = { id: number; name: string; isDefault: boolean; config: LabelConfig };
 
@@ -49,25 +55,37 @@ const templateLabel = (t?: { name: string; isDefault: boolean }) => (t ? `${t.na
 
 export function LabelDesigner({
   spools,
+  printers,
   sample,
+  printerSample,
   templates,
   initialTemplateId,
   initialConfig,
+  initialSubject,
   initialSelected,
-  baseUrl,
 }: {
-  spools: LabelData[];
-  sample: LabelData;
+  spools: SpoolLabelData[];
+  printers: PrinterLabelData[];
+  sample: SpoolLabelData;
+  printerSample: PrinterLabelData;
   templates: TemplateOption[];
   initialTemplateId: number | null;
   initialConfig: LabelConfig;
+  initialSubject: LabelSubject;
+  /** Spools or printers (whichever initialSubject is) to start with selected. */
   initialSelected: number[];
-  baseUrl: string;
 }) {
   const [config, setConfig] = useState(initialConfig);
   const [templateId, setTemplateId] = useState(initialTemplateId);
   const [templateName, setTemplateName] = useState(templates.find((t) => t.id === initialTemplateId)?.name ?? "");
-  const [selected, setSelected] = useState<number[]>(initialSelected);
+  const [subject, setSubject] = useState(initialSubject);
+  // Each kind keeps its own selection, so switching back and forth doesn't lose it.
+  const [selection, setSelection] = useState<Record<LabelSubject, number[]>>({
+    spools: initialSubject === "spools" ? initialSelected : [],
+    printers: initialSubject === "printers" ? initialSelected : [],
+  });
+  const selected = selection[subject];
+  const setSelected = (ids: number[]) => setSelection((s) => ({ ...s, [subject]: ids }));
   const [copies, setCopies] = useState(1);
   const [skipRaw, setSkip] = useState(0);
   const [saving, startSaving] = useTransition();
@@ -115,6 +133,11 @@ export function LabelDesigner({
 
   function toggleField(field: LabelField, on: boolean) {
     setLayout({ fields: on ? LABEL_FIELDS.filter((f) => f === field || layout.fields.includes(f)) : layout.fields.filter((f) => f !== field) });
+  }
+
+  function togglePrinterField(field: PrinterLabelField, on: boolean) {
+    const fields = layout.printerFields;
+    setLayout({ printerFields: on ? PRINTER_LABEL_FIELDS.filter((f) => f === field || fields.includes(f)) : fields.filter((f) => f !== field) });
   }
 
   function loadTemplate(value: string) {
@@ -166,11 +189,13 @@ export function LabelDesigner({
   const pageCount = config.sheet ? Math.ceil((skip + labelCount) / cells) : labelCount;
   const sheetFits = config.sheet ? sheetOverflow(config) : null;
 
-  const previewData = spools.find((s) => s.id === selected[0]) ?? sample;
+  const previewData =
+    subject === "spools" ? (spools.find((s) => s.id === selected[0]) ?? sample) : (printers.find((p) => p.id === selected[0]) ?? printerSample);
+  const isSample = previewData === sample || previewData === printerSample;
   const printHref = `/labels/print?${new URLSearchParams({
     c: encodeConfig(config),
     auto: "1",
-    spools: selected.join(","),
+    [subject]: selected.join(","),
     ...(copies > 1 ? { copies: String(copies) } : {}),
     ...(skip > 0 ? { skip: String(skip) } : {}),
   })}`;
@@ -178,6 +203,16 @@ export function LabelDesigner({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="grid grid-cols-1 content-start gap-6">
+        <Tabs value={subject} onValueChange={(v) => setSubject(v as LabelSubject)}>
+          <TabsList className="w-full sm:w-fit" aria-label="What to label">
+            <TabsTrigger value="spools" className="sm:px-4">
+              Spools
+            </TabsTrigger>
+            <TabsTrigger value="printers" className="sm:px-4">
+              Printers
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
         <Card>
           <CardHeader>
             <CardTitle>Preview</CardTitle>
@@ -186,8 +221,8 @@ export function LabelDesigner({
             <LabelPreview data={previewData} config={config} />
             <p className="text-muted-foreground text-center text-xs">
               {config.widthMm} × {config.heightMm} mm ·{" "}
-              {previewData === sample ? "sample data" : `spool #${previewData.code}`} · QR opens{" "}
-              <span className="font-mono">{baseUrl}/s/{previewData.code}</span>
+              {isSample ? "sample data" : previewData.kind === "spool" ? `spool #${previewData.code}` : previewData.name} · QR opens{" "}
+              <span className="font-mono break-all">{previewData.url}</span>
             </p>
             {config.sheet && (
               <SheetPreview config={config} skip={skip} count={labelCount} onPickSkip={(n) => setSkip(Math.min(n, cells - 1))} />
@@ -196,7 +231,11 @@ export function LabelDesigner({
           </CardContent>
         </Card>
 
-        <SpoolPicker spools={spools} selected={selected} onChange={setSelected} />
+        {subject === "spools" ? (
+          <SpoolPicker spools={spools} selected={selected} onChange={setSelected} />
+        ) : (
+          <PrinterPicker printers={printers} selected={selected} onChange={setSelected} />
+        )}
       </div>
 
       <div className="grid content-start gap-6">
@@ -229,7 +268,7 @@ export function LabelDesigner({
             ) : (
               <Button size="lg" disabled>
                 <PrinterIcon />
-                Select spools to print
+                Select {subject} to print
               </Button>
             )}
             {labelCount > 0 && (
@@ -379,22 +418,34 @@ export function LabelDesigner({
               step={0.5}
               onChange={(paddingMm) => setLayout({ paddingMm })}
             />
-            <SwitchRow id="bar" label="Color bar" checked={layout.colorBar} onChange={(colorBar) => setLayout({ colorBar })} />
-            <SwitchRow id="swatch" label="Color dot by the name" checked={layout.swatch} onChange={(swatch) => setLayout({ swatch })} />
-            <SwitchRow id="band" label="Color strip on the edge" checked={layout.colorBand} onChange={(colorBand) => setLayout({ colorBand })} />
+            {/* Printers have no colour of their own. */}
+            {subject === "spools" && (
+              <>
+                <SwitchRow id="bar" label="Color bar" checked={layout.colorBar} onChange={(colorBar) => setLayout({ colorBar })} />
+                <SwitchRow id="swatch" label="Color dot by the name" checked={layout.swatch} onChange={(swatch) => setLayout({ swatch })} />
+                <SwitchRow id="band" label="Color strip on the edge" checked={layout.colorBand} onChange={(colorBand) => setLayout({ colorBand })} />
+              </>
+            )}
             {layout.qrPosition !== "none" && (
               <SwitchRow id="logo" label="Logo in the QR code" checked={layout.qrLogo} onChange={(qrLogo) => setLayout({ qrLogo })} />
             )}
             <SwitchRow id="border" label="Border (cut guide)" checked={layout.border} onChange={(border) => setLayout({ border })} />
             <fieldset className="grid gap-2">
-              <legend className="mb-2 text-sm font-medium">Fields</legend>
+              <legend className="mb-2 text-sm font-medium">{subject === "spools" ? "Fields" : "Fields besides the name"}</legend>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                {LABEL_FIELDS.map((f) => (
-                  <label key={f} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={layout.fields.includes(f)} onCheckedChange={(v) => toggleField(f, v === true)} />
-                    {LABEL_FIELD_LABELS[f]}
-                  </label>
-                ))}
+                {subject === "spools"
+                  ? LABEL_FIELDS.map((f) => (
+                      <label key={f} className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={layout.fields.includes(f)} onCheckedChange={(v) => toggleField(f, v === true)} />
+                        {LABEL_FIELD_LABELS[f]}
+                      </label>
+                    ))
+                  : PRINTER_LABEL_FIELDS.map((f) => (
+                      <label key={f} className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={layout.printerFields.includes(f)} onCheckedChange={(v) => togglePrinterField(f, v === true)} />
+                        {PRINTER_LABEL_FIELD_LABELS[f]}
+                      </label>
+                    ))}
               </div>
             </fieldset>
           </CardContent>
@@ -471,7 +522,7 @@ function sheetOverflow({ widthMm, heightMm, sheet }: LabelConfig) {
   return null;
 }
 
-function LabelPreview({ data, config }: { data: LabelData; config: LabelConfig }) {
+function LabelPreview({ data, config }: { data: SpoolLabelData | PrinterLabelData; config: LabelConfig }) {
   const wPx = config.widthMm * MM_TO_PX;
   const hPx = config.heightMm * MM_TO_PX;
   // As large as the card allows, so small labels can be read.
@@ -547,7 +598,7 @@ function SpoolPicker({
   selected,
   onChange,
 }: {
-  spools: LabelData[];
+  spools: SpoolLabelData[];
   selected: number[];
   onChange: (ids: number[]) => void;
 }) {
@@ -631,6 +682,66 @@ function SpoolPicker({
               {visible.length === 0 && <li className="text-muted-foreground px-3 py-6 text-center text-sm">No matches.</li>}
             </ul>
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PrinterPicker({
+  printers,
+  selected,
+  onChange,
+}: {
+  printers: PrinterLabelData[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const selectedSet = new Set(selected);
+  const allSelected = printers.length > 0 && printers.every((p) => selectedSet.has(p.id));
+
+  function toggle(id: number, on: boolean) {
+    onChange(on ? printers.filter((p) => p.id === id || selectedSet.has(p.id)).map((p) => p.id) : selected.filter((x) => x !== id));
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <CardTitle>
+          Printers <span className="text-muted-foreground font-normal">({selected.length} selected)</span>
+        </CardTitle>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange(allSelected ? [] : printers.map((p) => p.id))}
+          disabled={printers.length === 0}
+        >
+          {allSelected ? "Deselect all" : "Select all"}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {printers.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No printers yet. Add one on the Printers page to print its label.</p>
+        ) : (
+          <ul className="divide-border max-h-96 divide-y overflow-y-auto rounded-lg border">
+            {printers.map((p) => (
+              <li key={p.id}>
+                <label className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 px-3 py-2">
+                  <Checkbox checked={selectedSet.has(p.id)} onCheckedChange={(v) => toggle(p.id, v === true)} />
+                  <MotionIcon motion={p.motion} className="text-muted-foreground size-6 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{p.name}</span>
+                    <span className="text-muted-foreground block truncate text-xs">
+                      {[[p.values.brand, p.values.model].filter(Boolean).join(" "), p.values.motion, p.values.location]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>

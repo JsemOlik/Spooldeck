@@ -6,7 +6,7 @@ import { getSpoolsForLabels, listSpools } from "@/db/queries/spools";
 import { labelTemplates } from "@/db/schema";
 import { getBaseUrl } from "@/lib/base-url";
 import { DEFAULT_CONFIG, labelConfigSchema } from "@/lib/labels/config";
-import { buildLabelData, sampleLabelData } from "@/lib/labels/data";
+import { buildLabelData, buildPrinterLabelData, getPrintersForLabels, sampleLabelData, samplePrinterLabelData } from "@/lib/labels/data";
 import { idListParam, intParam } from "@/lib/params";
 import { getAppSettings } from "@/lib/settings";
 
@@ -14,24 +14,34 @@ export const metadata: Metadata = { title: "Labels" };
 
 export default async function LabelsPage({ searchParams }: PageProps<"/labels">) {
   const sp = await searchParams;
-  const selectedIds = idListParam(sp.spools);
+  // ?printers=1,2 opens the designer on printer labels; otherwise it's spools (?spools=…).
+  const subject = sp.printers !== undefined ? "printers" : "spools";
+  const selectedIds = idListParam(subject === "printers" ? sp.printers : sp.spools);
   const templateId = intParam(sp.template);
 
-  const [rows, active, settings, baseUrl] = await Promise.all([
+  const [rows, active, settings, baseUrl, printerRows] = await Promise.all([
     db.query.labelTemplates.findMany({ orderBy: labelTemplates.name }),
     listSpools({ status: "active", sort: "name" }),
     getAppSettings(),
     getBaseUrl(),
+    getPrintersForLabels(),
   ]);
 
   // Selected spools first (they may be empty or archived), then everything in stock.
-  const ids = [...new Set([...selectedIds, ...active.map((s) => s.id)])];
+  const spoolIds = subject === "spools" ? selectedIds : [];
+  const ids = [...new Set([...spoolIds, ...active.map((s) => s.id)])];
   const byId = new Map((await getSpoolsForLabels(ids)).map((s) => [s.id, s]));
-  const spools = await buildLabelData(
-    ids.flatMap((id) => byId.get(id) ?? []),
-    baseUrl,
-    settings.currency,
-  );
+  const [spools, printers, sample, printerSample] = await Promise.all([
+    buildLabelData(
+      ids.flatMap((id) => byId.get(id) ?? []),
+      baseUrl,
+      settings.currency,
+    ),
+    buildPrinterLabelData(printerRows, baseUrl),
+    sampleLabelData(baseUrl),
+    samplePrinterLabelData(baseUrl),
+  ]);
+  const known = new Set(subject === "spools" ? byId.keys() : printerRows.map((p) => p.id));
 
   const templates: TemplateOption[] = rows.flatMap((t) => {
     const config = labelConfigSchema.safeParse({ widthMm: t.widthMm, heightMm: t.heightMm, layout: t.layout, sheet: t.sheet });
@@ -43,17 +53,19 @@ export default async function LabelsPage({ searchParams }: PageProps<"/labels">)
     <>
       <PageHeader
         title="Labels"
-        description="Design a label, pick spools and print. Scanning a label opens its spool."
+        description="Design a label, pick spools or printers and print. Scanning a label opens its spool or printer."
       />
       <LabelDesigner
         key={initialTemplate?.id ?? "new"}
         spools={spools}
-        sample={await sampleLabelData(baseUrl)}
+        printers={printers}
+        sample={sample}
+        printerSample={printerSample}
         templates={templates}
         initialTemplateId={initialTemplate?.id ?? null}
         initialConfig={initialTemplate?.config ?? DEFAULT_CONFIG}
-        initialSelected={selectedIds.filter((id) => byId.has(id))}
-        baseUrl={baseUrl}
+        initialSubject={subject}
+        initialSelected={selectedIds.filter((id) => known.has(id))}
       />
     </>
   );

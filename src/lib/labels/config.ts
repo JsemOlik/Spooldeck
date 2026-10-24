@@ -33,10 +33,28 @@ export const LABEL_FIELD_LABELS: Record<LabelField, string> = {
   code: "Spool code",
 };
 
+/** What a printer's label can show besides its name. */
+export const PRINTER_LABEL_FIELDS = ["brand", "model", "motion", "tools", "location"] as const;
+export type PrinterLabelField = (typeof PRINTER_LABEL_FIELDS)[number];
+
+export const PRINTER_LABEL_FIELD_LABELS: Record<PrinterLabelField, string> = {
+  brand: "Brand",
+  model: "Model",
+  motion: "Motion system",
+  tools: "Tools",
+  location: "Location",
+};
+
+/** Labels for spools, or for printers (their QR code opens the printer's page). */
+export const LABEL_SUBJECTS = ["spools", "printers"] as const;
+export type LabelSubject = (typeof LABEL_SUBJECTS)[number];
+
 export const layoutSchema = z.object({
   qrPosition: z.enum(["left", "right", "top", "none"]).default("left"),
   qrScale: z.number().min(0.3).max(1).default(1),
   fields: z.array(z.enum(LABEL_FIELDS)).default(["brand", "material", "colorName", "code"]),
+  /** The fields on printer labels, which share the rest of the layout with spool labels. */
+  printerFields: z.array(z.enum(PRINTER_LABEL_FIELDS)).default(["brand", "model", "motion", "tools", "location"]),
   fontScale: z.number().min(0.5).max(2).default(1),
   paddingMm: z.number().min(0).max(10).default(2),
   border: z.boolean().default(false),
