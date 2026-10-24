@@ -25,23 +25,35 @@ type Tool = {
 export function ToolStrip({
   tools,
   spools,
+  elsewhere = {},
   onLoad,
   disabled,
 }: {
   tools: Tool[];
   spools: SpoolChoice[];
+  /** Spools loaded on other printers, by id, with where they are ("Voron", "XL · T2"). */
+  elsewhere?: Record<number, string>;
   onLoad: (tool: number, spoolId: number | null) => void;
   disabled?: boolean;
 }) {
   return (
-    // One row in the printer's own order, so it reads like the toolheads or slots themselves;
-    // more tools than fit scroll sideways rather than wrapping onto a second row.
-    <ol className="-mx-1 grid auto-cols-[minmax(3.5rem,1fr)] grid-flow-col gap-1.5 overflow-x-auto px-1 pb-1 sm:gap-2" aria-label="Tools">
-      {tools.map((t) => (
-        <li key={t.tool} className="min-w-0">
-          <ToolButton tool={t} spools={spools} onLoad={(id) => onLoad(t.tool, id)} disabled={disabled} />
-        </li>
-      ))}
+    // One row in the printer's own order, so it reads like the toolheads or slots themselves. The
+    // tools share the width; only more than fit (a 16-slot MMU on a phone) scroll sideways.
+    <ol
+      className="-m-1 grid gap-1 overflow-x-auto p-1 sm:gap-2"
+      style={{ gridTemplateColumns: `repeat(${tools.length}, minmax(2.25rem, 1fr))` }}
+      aria-label="Tools"
+    >
+      {tools.map((t) => {
+        // A spool can only be in one place, so the ones on the other tools are taken too.
+        const taken = { ...elsewhere };
+        for (const o of tools) if (o.spool && o.tool !== t.tool) taken[o.spool.id] = `T${o.tool + 1}`;
+        return (
+          <li key={t.tool} className="min-w-0">
+            <ToolButton tool={t} spools={spools} taken={taken} onLoad={(id) => onLoad(t.tool, id)} disabled={disabled} />
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -49,11 +61,13 @@ export function ToolStrip({
 function ToolButton({
   tool,
   spools,
+  taken,
   onLoad,
   disabled,
 }: {
   tool: Tool;
   spools: SpoolChoice[];
+  taken: Record<number, string>;
   onLoad: (spoolId: number | null) => void;
   disabled?: boolean;
 }) {
@@ -68,7 +82,8 @@ function ToolButton({
           disabled={disabled}
           aria-label={`${label}: ${s ? spoolLabel(s) : "no spool loaded"}. Change spool`}
           className={cn(
-            "hover:bg-muted/60 focus-visible:ring-ring/50 data-[state=open]:border-primary relative grid h-full w-full min-w-0 content-start justify-items-center gap-1.5 rounded-xl border px-1.5 pt-2 pb-2.5 text-center transition-colors outline-none focus-visible:ring-3 disabled:opacity-60",
+            // A size container, so the swatch and text scale with the tile however many tools share the row.
+            "@container hover:bg-muted/60 focus-visible:ring-ring/50 data-[state=open]:border-primary relative grid h-full w-full min-w-0 content-start justify-items-center gap-1.5 rounded-xl border px-0.5 pt-2 pb-2.5 text-center transition-colors outline-none focus-visible:ring-3 disabled:opacity-60",
             tool.active && "border-primary bg-primary/5",
           )}
         >
@@ -77,19 +92,27 @@ function ToolButton({
             {tool.active && <span className="bg-primary size-1.5 animate-pulse rounded-full" aria-hidden />}
           </span>
           {s ? (
-            <ColorSwatch hex={s.colorHex} title={s.colorName ?? undefined} className="size-10 sm:size-12" />
+            <ColorSwatch hex={s.colorHex} title={s.colorName ?? undefined} className="size-[clamp(1.5rem,80cqi,3rem)]" />
           ) : (
-            <span className="border-muted-foreground/40 text-muted-foreground flex size-10 items-center justify-center rounded-full border-2 border-dashed sm:size-12">
-              <PlusIcon className="size-5" />
+            <span className="border-muted-foreground/40 text-muted-foreground flex size-[clamp(1.5rem,80cqi,3rem)] items-center justify-center rounded-full border-2 border-dashed">
+              <PlusIcon className="size-[45%]" />
             </span>
           )}
-          <span className={cn("line-clamp-2 w-full text-xs leading-tight break-words sm:text-sm", s ? "font-medium" : "text-muted-foreground")}>
+          {/* Sized to the tile, so names fit whole words on a line. Tiles too narrow for any name
+              (eight tools on a phone) show just the colour; the button's label still names it. */}
+          <span
+            lang="en"
+            className={cn(
+              "hidden w-full text-[clamp(0.625rem,24cqi,0.875rem)] leading-tight break-words hyphens-auto @[2.25rem]:line-clamp-2",
+              s ? "font-medium" : "text-muted-foreground",
+            )}
+          >
             {s ? s.colorName || s.filamentName : "Empty"}
           </span>
           {s && (
-            <span className="text-muted-foreground w-full truncate text-[11px] tabular sm:text-xs">
+            <span className="text-muted-foreground hidden w-full truncate text-[clamp(0.625rem,22cqi,0.75rem)] tabular @[2.25rem]:block">
               {tool.grams != null ? formatGrams(tool.grams, { precise: true }) : formatGrams(Math.max(0, s.remaining))}
-              <span className="hidden sm:inline">{tool.grams != null ? " this print" : " left"}</span>
+              <span className="hidden @[6rem]:inline">{tool.grams != null ? " this print" : " left"}</span>
             </span>
           )}
         </button>
@@ -103,6 +126,7 @@ function ToolButton({
         <SpoolPicker
           title={label}
           spools={spools}
+          taken={taken}
           value={s?.id ?? null}
           onPick={(id) => {
             setOpen(false);
@@ -117,18 +141,22 @@ function ToolButton({
 function SpoolPicker({
   title,
   spools,
+  taken,
   value,
   onPick,
 }: {
   title: string;
   spools: SpoolChoice[];
+  taken: Record<number, string>;
   value: number | null;
   onPick: (spoolId: number | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const list = useRef<HTMLDivElement>(null);
   const q = query.trim().toLowerCase();
-  const shown = q ? spools.filter((s) => spoolLabel(s).toLowerCase().includes(q)) : spools;
+  const matches = q ? spools.filter((s) => spoolLabel(s).toLowerCase().includes(q)) : spools;
+  // Spools loaded somewhere else go last, greyed out.
+  const shown = [...matches.filter((s) => !taken[s.id]), ...matches.filter((s) => taken[s.id])];
 
   // Arrow keys move between the search box and the choices.
   function onKeyDown(e: React.KeyboardEvent) {
@@ -157,7 +185,7 @@ function SpoolPicker({
       <div ref={list} className="grid max-h-72 min-h-0 flex-1 content-start overflow-y-auto p-1" role="listbox" aria-label={`Spools for ${title.toLowerCase()}`}>
         {!q && <PickItem selected={value === null} onPick={() => onPick(null)} label="No spool loaded" />}
         {shown.map((s) => (
-          <PickItem key={s.id} selected={value === s.id} onPick={() => onPick(s.id)} spool={s} />
+          <PickItem key={s.id} selected={value === s.id} onPick={() => onPick(s.id)} spool={s} takenBy={taken[s.id]} />
         ))}
         {shown.length === 0 && <p className="text-muted-foreground px-2 py-3 text-sm">No spools match.</p>}
       </div>
@@ -172,15 +200,30 @@ function SpoolPicker({
   );
 }
 
-function PickItem({ selected, onPick, spool, label }: { selected: boolean; onPick: () => void; spool?: SpoolChoice; label?: string }) {
+function PickItem({
+  selected,
+  onPick,
+  spool,
+  label,
+  takenBy,
+}: {
+  selected: boolean;
+  onPick: () => void;
+  spool?: SpoolChoice;
+  label?: string;
+  /** Where the spool is loaded, when it's already on another tool or printer. */
+  takenBy?: string;
+}) {
   return (
     <button
       type="button"
       role="option"
       aria-selected={selected}
-      data-pick
+      aria-disabled={!!takenBy}
+      disabled={!!takenBy}
+      data-pick={takenBy ? undefined : ""}
       onClick={onPick}
-      className="hover:bg-muted focus-visible:bg-muted flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none"
+      className="hover:bg-muted focus-visible:bg-muted flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-none disabled:pointer-events-none disabled:opacity-45 disabled:grayscale"
     >
       {spool ? (
         <ColorSwatch hex={spool.colorHex} className="size-6" />
@@ -193,7 +236,7 @@ function PickItem({ selected, onPick, spool, label }: { selected: boolean; onPic
             <span className="block truncate text-sm font-medium">{spool.colorName || spool.filamentName}</span>
             <span className="text-muted-foreground block truncate text-xs">
               {spool.colorName ? `${spool.filamentName} · ` : ""}
-              {formatGrams(Math.max(0, spool.remaining))} left · {spool.code}
+              {takenBy ? `On ${takenBy}` : `${formatGrams(Math.max(0, spool.remaining))} left · ${spool.code}`}
             </span>
           </>
         ) : (
