@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   encodeConfig,
@@ -34,6 +34,18 @@ import type { LabelData } from "@/lib/labels/data";
 export type TemplateOption = { id: number; name: string; isDefault: boolean; config: LabelConfig };
 
 const MM_TO_PX = 96 / 25.4;
+/** Select value for "not a saved template" (Radix Select items can't be empty). */
+const NEW_TEMPLATE = "new";
+
+const PAGE_LABELS: Record<SheetLayout["page"], string> = { A4: "A4 (210 × 297 mm)", Letter: "Letter (8.5 × 11 in)" };
+const QR_POSITION_LABELS: Record<LabelLayout["qrPosition"], string> = {
+  left: "Left",
+  right: "Right",
+  top: "Top",
+  none: "No QR code",
+};
+
+const templateLabel = (t?: { name: string; isDefault: boolean }) => (t ? `${t.name}${t.isDefault ? " (default)" : ""}` : "New template");
 
 export function LabelDesigner({
   spools,
@@ -236,18 +248,24 @@ export function LabelDesigner({
           </CardHeader>
           <CardContent className="grid gap-4">
             <Field label="Preset" htmlFor="preset">
-              <NativeSelect id="preset" value={presetId} onChange={(e) => applyPreset(e.target.value)}>
-                {presetId === "custom" && <option value="custom">Custom</option>}
-                {Object.entries(Object.groupBy(LABEL_PRESETS, (p) => p.group)).map(([group, presets]) => (
-                  <optgroup key={group} label={group}>
-                    {presets!.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </NativeSelect>
+              <Select value={presetId} onValueChange={applyPreset}>
+                <SelectTrigger id="preset" className="w-full">
+                  <SelectValue>{LABEL_PRESETS.find((p) => p.id === presetId)?.name ?? "Custom"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {presetId === "custom" && <SelectItem value="custom">Custom</SelectItem>}
+                  {Object.entries(Object.groupBy(LABEL_PRESETS, (p) => p.group)).map(([group, presets]) => (
+                    <SelectGroup key={group}>
+                      <SelectLabel>{group}</SelectLabel>
+                      {presets!.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <NumberField
@@ -273,14 +291,18 @@ export function LabelDesigner({
             {config.sheet && (
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Page" htmlFor="page" className="col-span-2">
-                  <NativeSelect
-                    id="page"
-                    value={config.sheet.page}
-                    onChange={(e) => setSheet({ page: e.target.value as SheetLayout["page"] })}
-                  >
-                    <option value="A4">A4 (210 × 297 mm)</option>
-                    <option value="Letter">Letter (8.5 × 11 in)</option>
-                  </NativeSelect>
+                  <Select value={config.sheet.page} onValueChange={(page) => setSheet({ page: page as SheetLayout["page"] })}>
+                    <SelectTrigger id="page" className="w-full">
+                      <SelectValue>{PAGE_LABELS[config.sheet.page]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {Object.entries(PAGE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <NumberField label="Columns" value={config.sheet.cols} min={1} max={10} step={1} onChange={(cols) => setSheet({ cols })} />
                 <NumberField label="Rows" value={config.sheet.rows} min={1} max={40} step={1} onChange={(rows) => setSheet({ rows })} />
@@ -331,16 +353,18 @@ export function LabelDesigner({
           </CardHeader>
           <CardContent className="grid gap-4">
             <Field label="QR code" htmlFor="qr">
-              <NativeSelect
-                id="qr"
-                value={layout.qrPosition}
-                onChange={(e) => setLayout({ qrPosition: e.target.value as LabelLayout["qrPosition"] })}
-              >
-                <option value="left">Left</option>
-                <option value="right">Right</option>
-                <option value="top">Top</option>
-                <option value="none">No QR code</option>
-              </NativeSelect>
+              <Select value={layout.qrPosition} onValueChange={(qrPosition) => setLayout({ qrPosition: qrPosition as LabelLayout["qrPosition"] })}>
+                <SelectTrigger id="qr" className="w-full">
+                  <SelectValue>{QR_POSITION_LABELS[layout.qrPosition]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {Object.entries(QR_POSITION_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             {layout.qrPosition !== "none" && (
               <RangeField label="QR size" value={layout.qrScale} min={0.3} max={1} onChange={(qrScale) => setLayout({ qrScale })} />
@@ -379,15 +403,19 @@ export function LabelDesigner({
           <CardContent className="grid gap-4">
             {templates.length > 0 && (
               <Field label="Load" htmlFor="template">
-                <NativeSelect id="template" value={templateId ?? ""} onChange={(e) => loadTemplate(e.target.value)}>
-                  <option value="">New template</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                      {t.isDefault ? " (default)" : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <Select value={templateId != null ? String(templateId) : NEW_TEMPLATE} onValueChange={loadTemplate}>
+                  <SelectTrigger id="template" className="w-full">
+                    <SelectValue>{templateLabel(templates.find((t) => t.id === templateId))}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value={NEW_TEMPLATE}>New template</SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {templateLabel(t)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             )}
             <Field label="Name" htmlFor="template-name">

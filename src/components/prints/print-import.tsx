@@ -10,7 +10,7 @@ import { Field, FormError } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatGrams } from "@/lib/format";
 import { DEFAULT_DENSITY, gramsFor, type SpoolCandidate, suggestSpools } from "@/lib/slicer/match";
 import { parseSlicedFile, type SliceInfo, SlicerParseError } from "@/lib/slicer/parse";
@@ -21,6 +21,8 @@ export type SpoolOption = SpoolCandidate & { code: string };
 type Row = { spoolId: number | null; grams: string; edited: boolean };
 
 const ACCEPT = ".gcode,.bgcode,.gco,.g";
+// Radix Select items can't have an empty value.
+const SKIP = "skip";
 
 function spoolLabel(s: SpoolOption) {
   const name = [s.brandName, s.filamentName].filter(Boolean).join(" ");
@@ -213,22 +215,23 @@ export function PrintImport({ spools }: { spools: SpoolOption[] }) {
               </div>
               <div className="grid items-start gap-3 sm:grid-cols-[1fr_8rem]">
                 <Field label="Spool" htmlFor={`spool-${i}`}>
-                  <div className="flex items-center gap-2">
-                    <ColorSwatch hex={spool?.colorHex} className="size-6" />
-                    <NativeSelect
-                      id={`spool-${i}`}
-                      className="min-w-0 flex-1"
-                      value={row.spoolId ?? ""}
-                      onChange={(e) => updateRow(i, { spoolId: e.target.value ? Number(e.target.value) : null })}
-                    >
-                      <option value="">Don&apos;t log this filament</option>
+                  <Select
+                    value={row.spoolId ? String(row.spoolId) : SKIP}
+                    onValueChange={(v) => updateRow(i, { spoolId: v === SKIP ? null : Number(v) })}
+                  >
+                    <SelectTrigger id={`spool-${i}`} className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="max-w-(--radix-select-content-available-width)">
+                      <SelectItem value={SKIP}>Don&apos;t log this filament</SelectItem>
                       {spools.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {spoolLabel(s)}
-                        </option>
+                        <SelectItem key={s.id} value={String(s.id)} className="*:[span]:last:min-w-0">
+                          <ColorSwatch hex={s.colorHex} className="size-4" />
+                          <span className="truncate">{spoolLabel(s)}</span>
+                        </SelectItem>
                       ))}
-                    </NativeSelect>
-                  </div>
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field
                   label="Grams"

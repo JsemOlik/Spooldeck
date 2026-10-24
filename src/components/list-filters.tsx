@@ -5,7 +5,13 @@ import { useEffect, useState, useTransition } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 export type FilterSelect = {
@@ -16,7 +22,16 @@ export type FilterSelect = {
   allLabel?: string;
 };
 
-export function ListFilters({ selects, placeholder = "Search…" }: { selects: FilterSelect[]; placeholder?: string }) {
+// Radix Select items can't have an empty value, so "no filter" gets its own.
+const ALL = "__all";
+
+export function ListFilters({
+  selects,
+  placeholder = "Search…",
+}: {
+  selects: FilterSelect[];
+  placeholder?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -27,7 +42,9 @@ export function ListFilters({ selects, placeholder = "Search…" }: { selects: F
     const next = new URLSearchParams(params.toString());
     if (value) next.set(name, value);
     else next.delete(name);
-    startTransition(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
+    startTransition(() =>
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false }),
+    );
   }
 
   useEffect(() => {
@@ -40,27 +57,48 @@ export function ListFilters({ selects, placeholder = "Search…" }: { selects: F
   const hasFilters = [...params.keys()].length > 0;
 
   return (
-    <div className={cn("mb-4 flex flex-wrap items-center gap-2 transition-opacity", pending && "opacity-70")}>
+    <div
+      className={cn(
+        "mb-4 flex flex-wrap items-center gap-2 transition-opacity",
+        pending && "opacity-70",
+      )}
+    >
       <div className="relative min-w-48 flex-1">
         <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} className="pl-8" aria-label="Search" />
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={placeholder}
+          className="pl-8"
+          aria-label="Search"
+        />
       </div>
-      {selects.map((s) => (
-        <NativeSelect
-          key={s.name}
-          aria-label={s.label}
-          value={params.get(s.name) ?? ""}
-          onChange={(e) => update(s.name, e.target.value)}
-          className="w-auto min-w-32"
-        >
-          <option value="">{s.allLabel ?? `All ${s.label.toLowerCase()}`}</option>
-          {s.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </NativeSelect>
-      ))}
+      {selects.map((s) => {
+        const value = params.get(s.name) || ALL;
+        const allLabel = s.allLabel ?? `All ${s.label.toLowerCase()}`;
+        return (
+          <Select
+            key={s.name}
+            value={value}
+            onValueChange={(v) => update(s.name, v === ALL ? "" : v)}
+          >
+            <SelectTrigger aria-label={s.label} className="min-w-32">
+              {/* Explicit label so the server-rendered HTML isn't blank before hydration. */}
+              <SelectValue>
+                {s.options.find((o) => o.value === value)?.label ?? allLabel}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value={ALL}>{allLabel}</SelectItem>
+              {s.options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      })}
       {hasFilters && (
         <Button
           variant="ghost"

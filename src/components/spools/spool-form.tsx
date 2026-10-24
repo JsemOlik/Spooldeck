@@ -3,15 +3,16 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
+import { ColorSwatch } from "@/components/color-swatch";
 import { ActionForm } from "@/components/forms/action-form";
 import { Field, FormError } from "@/components/forms/field";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SPOOL_STATUSES, type Spool } from "@/db/schema";
+import { SPOOL_STATUSES, type Spool, type SpoolStatus } from "@/db/schema";
 import type { FilamentOption } from "@/db/queries/filaments";
 import { STATUS_LABELS } from "@/components/spools/status-badge";
 import { type ActionState, initialActionState } from "@/lib/action-state";
@@ -30,10 +31,14 @@ function filamentLabel(f: FilamentOption) {
   return [f.brandName, f.materialName, f.colorName || f.name].filter(Boolean).join(" · ");
 }
 
+// Radix Select items can't have an empty value; this one submits as "" (status picked from the weight).
+const AUTO_STATUS = "__auto";
+
 export function SpoolForm({ action, filaments, vendors, locations, currency, defaults = {}, mode }: Props) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
   const fe = state.fieldErrors ?? {};
   const [filamentId, setFilamentId] = useState(defaults.filamentId ? String(defaults.filamentId) : "");
+  const [status, setStatus] = useState<string>(defaults.status ?? AUTO_STATUS);
   const selected = filaments.find((f) => String(f.id) === filamentId);
   const [initialWeight, setInitialWeight] = useState(
     defaults.initialWeight != null ? String(defaults.initialWeight) : selected ? String(selected.nominalWeight) : "1000",
@@ -61,23 +66,27 @@ export function SpoolForm({ action, filaments, vendors, locations, currency, def
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field label="Filament" htmlFor="filamentId" error={fe.filamentId} className="sm:col-span-2">
             <div className="flex gap-2">
-              <NativeSelect
-                id="filamentId"
-                name="filamentId"
-                value={filamentId}
-                onChange={(e) => onFilamentChange(e.target.value)}
-                required
-                className="flex-1"
-              >
-                <option value="" disabled>
-                  Choose a filament…
-                </option>
-                {filaments.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {filamentLabel(f)}
-                  </option>
-                ))}
-              </NativeSelect>
+              <input type="hidden" name="filamentId" value={filamentId} />
+              <Select value={filamentId} onValueChange={onFilamentChange}>
+                <SelectTrigger id="filamentId" className="min-w-0 flex-1" aria-invalid={!!fe.filamentId}>
+                  <SelectValue placeholder="Choose a filament…">
+                    {selected && (
+                      <>
+                        <ColorSwatch hex={selected.colorHex} className="size-4" />
+                        <span className="truncate">{filamentLabel(selected)}</span>
+                      </>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent position="popper" className="max-w-(--radix-select-content-available-width)">
+                  {filaments.map((f) => (
+                    <SelectItem key={f.id} value={String(f.id)} className="*:[span]:last:min-w-0">
+                      <ColorSwatch hex={f.colorHex} className="size-4" />
+                      <span className="truncate">{filamentLabel(f)}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {mode === "create" && (
                 <Button asChild variant="outline">
                   <Link href="/filaments/new?then=spool">
@@ -113,14 +122,20 @@ export function SpoolForm({ action, filaments, vendors, locations, currency, def
             </datalist>
           </Field>
           <Field label="Status" htmlFor="status" error={fe.status}>
-            <NativeSelect id="status" name="status" defaultValue={defaults.status ?? ""}>
-              {mode === "create" && <option value="">Automatic</option>}
-              {SPOOL_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </option>
-              ))}
-            </NativeSelect>
+            <input type="hidden" name="status" value={status === AUTO_STATUS ? "" : status} />
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger id="status" className="w-full">
+                <SelectValue>{status === AUTO_STATUS ? "Automatic" : STATUS_LABELS[status as SpoolStatus]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {mode === "create" && <SelectItem value={AUTO_STATUS}>Automatic</SelectItem>}
+                {SPOOL_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
         </CardContent>
       </Card>
