@@ -109,7 +109,8 @@ Open **Labels** to design one:
 
 - **Size:** pick a preset (Brother QL 62 mm, 50×30/40×30 thermal, Niimbot/Dymo, A4 and Letter sticker sheets) or enter any size in mm.
 - **Content and layout:** a label shows the brand, the colour name, the material and spool code, and a bar in the filament's colour, with the Spooldeck spool on that colour in the middle of the QR code. Add the nozzle and bed temperatures or other fields under **Fields**, move the QR code, and save the setup as a template.
-- **Printing:** select spools and press **Print**. The print view sets the page size to match the label.
+- **Printers:** switch to **Printers** to label a printer instead. Its label shows the name, brand, model, motion system, tools and location, and scanning it opens the printer's page. A printer's page has a **Print label** button too.
+- **Printing:** select spools or printers and press **Print**. The print view sets the page size to match the label.
   - In the browser's print dialog, choose margins **None** and scale **100%**.
   - On a label printer, pick the matching paper size.
   - On a sticker sheet, use **Skip cells** to begin on a partly used sheet.
@@ -129,11 +130,12 @@ Spooldeck can follow your printers and take the filament off the loaded spools w
 1. Open **Printers → Add printer**, pick the type and enter the address:
    - **Klipper:** the address you open Mainsail or Fluidd on usually works; otherwise use the printer's IP with port 7125, e.g. `http://192.168.1.50:7125`.
    - **Prusa:** turn on PrusaLink on the printer, then enter its IP address and the username and password shown in its network settings (the username is usually `maker`).
-2. Set **Tools** to the number of toolheads (an XL, a toolchanger, or an INDX, Prusa's toolchanger) or MMU slots. Each tool holds its own spool.
-3. Pick the spool that's loaded on each tool. A printer with several tools shows them in a row, T1 to the last, each in the colour of its spool, so you can match them to the printer at a glance. Click one to pick its spool. You can also do this from a spool's **⋯** menu, so scanning the label on the spool you just put on is enough.
-4. Print as usual. The printer card, the dashboard and the spool page update on their own every few seconds.
+2. Optionally add its brand, model, motion system (bedslinger or CoreXY) and location, which tell printers apart on their cards, their page and their labels.
+3. Set **Tools** to the number of toolheads (an XL, a toolchanger, or an INDX, Prusa's toolchanger) or MMU slots. Each tool holds its own spool.
+4. Pick the spool that's loaded on each tool. A printer with several tools shows them in a row, T1 to the last, each in the colour of its spool, so you can match them to the printer at a glance. Click one to pick its spool. You can also do this from a spool's **⋯** menu, so scanning the label on the spool you just put on is enough.
+5. Print as usual. The printer card, the dashboard and the spool page update on their own every few seconds.
 
-Click a printer's name to open its page. It shows the live status and loaded spools, plus what the printer has printed: totals and filament cost, a chart of the grams used per day over the last 30 days, the recent prints with the spools each one used, and the filaments it goes through most. A print that used several tools or spools is one row.
+Click a printer's name to open its page. It shows the printer's details with a drawing of its motion system, the live status and loaded spools, plus what the printer has printed: totals and filament cost, a chart of the grams used per day over the last 30 days, the recent prints with the spools each one used, and the filaments it goes through most. A print that used several tools or spools is one row.
 
 How the filament is counted:
 
