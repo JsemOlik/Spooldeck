@@ -109,7 +109,7 @@ export default async function PrinterPage({ params }: PageProps<"/printers/[id]"
                   <MotionIcon motion={printer.motion} className="size-14" />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate font-semibold">{makeModel || printer.name}</div>
+                  <div className="font-semibold text-balance break-words">{makeModel || printer.name}</div>
                   <div className="text-muted-foreground text-sm">
                     {printer.motion ? MOTION_LABEL[printer.motion] : "Motion system not set"}
                   </div>
