@@ -71,22 +71,12 @@ function isDark(hex: string) {
 const BRAND_HEX = "#df5200";
 
 /**
- * The middle of the QR code: on a spool's label, Spooldeck's spool on a tile of the filament's
- * colour; on a printer's label, Spooldeck's own icon (src/app/icon.svg). The white margin keeps it
- * apart from the modules around it; the code's high error correction covers it.
+ * Spooldeck's spool on a tile of the filament's colour (Spooldeck's orange on a printer's label),
+ * for the middle of the QR code. The white margin keeps it apart from the modules around it; the
+ * code's high error correction covers it.
  */
 function QrLogo({ color, printer }: { color: string | null; printer?: boolean }) {
-  if (printer) {
-    return (
-      <svg viewBox="0 0 32 32" aria-hidden className="absolute top-1/2 left-1/2 size-[26%] -translate-1/2">
-        <circle cx="16" cy="16" r="16" fill="#ffffff" />
-        <circle cx="16" cy="16" r="13.5" fill={BRAND_HEX} />
-        <circle cx="16" cy="16" r="8.55" fill="none" stroke="#ffffff" strokeWidth="2.16" strokeDasharray="2.88 2.07" />
-        <circle cx="16" cy="16" r="3.96" fill="#ffffff" />
-      </svg>
-    );
-  }
-  const tile = color ?? "#000000";
+  const tile = printer ? BRAND_HEX : (color ?? "#000000");
   // The spool is black on light colours and white on dark ones, the hub the opposite.
   const [spool, hub] = isDark(tile) ? ["#ffffff", "#000000"] : ["#000000", "#ffffff"];
   return (
