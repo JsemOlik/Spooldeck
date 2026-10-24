@@ -28,6 +28,7 @@ import {
   PAGE_SIZES_MM,
   PRINTER_LABEL_FIELD_LABELS,
   PRINTER_LABEL_FIELDS,
+  sheetGeometry,
   type LabelConfig,
   type LabelField,
   type LabelLayout,
@@ -126,6 +127,7 @@ export function LabelDesigner({
           marginLeftMm: 0,
           gapXMm: 0,
           gapYMm: 0,
+          pagePaddingMm: 0,
         },
       };
     });
@@ -187,7 +189,7 @@ export function LabelDesigner({
   const skip = config.sheet ? Math.min(skipRaw, cells - 1) : 0;
   const labelCount = selected.length * copies;
   const pageCount = config.sheet ? Math.ceil((skip + labelCount) / cells) : labelCount;
-  const sheetFits = config.sheet ? sheetOverflow(config) : null;
+  const sheetNote = config.sheet ? sheetFitNote({ ...config, sheet: config.sheet }) : null;
 
   const previewData =
     subject === "spools" ? (spools.find((s) => s.id === selected[0]) ?? sample) : (printers.find((p) => p.id === selected[0]) ?? printerSample);
@@ -227,7 +229,7 @@ export function LabelDesigner({
             {config.sheet && (
               <SheetPreview config={config} skip={skip} count={labelCount} onPickSkip={(n) => setSkip(Math.min(n, cells - 1))} />
             )}
-            {sheetFits && <p className="text-destructive text-center text-sm">{sheetFits}</p>}
+            {sheetNote && <p className="text-muted-foreground text-center text-sm text-balance">{sheetNote}</p>}
           </CardContent>
         </Card>
 
@@ -381,6 +383,17 @@ export function LabelDesigner({
                   step={0.05}
                   onChange={(gapYMm) => setSheet({ gapYMm })}
                 />
+                <NumberField
+                  label="Page padding"
+                  suffix="mm"
+                  value={config.sheet.pagePaddingMm}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  onChange={(pagePaddingMm) => setSheet({ pagePaddingMm })}
+                  hint="For printers that can't print to the edge. The labels shrink to fit inside it."
+                  className="col-span-2"
+                />
               </div>
             )}
           </CardContent>
@@ -511,15 +524,14 @@ export function LabelDesigner({
   );
 }
 
-function sheetOverflow({ widthMm, heightMm, sheet }: LabelConfig) {
-  if (!sheet) return null;
-  const [pw, ph] = PAGE_SIZES_MM[sheet.page];
-  const usedW = sheet.marginLeftMm + sheet.cols * widthMm + (sheet.cols - 1) * sheet.gapXMm;
-  const usedH = sheet.marginTopMm + sheet.rows * heightMm + (sheet.rows - 1) * sheet.gapYMm;
-  if (usedW > pw + 0.5 || usedH > ph + 0.5) {
-    return `The grid is ${usedW.toFixed(1)} × ${usedH.toFixed(1)} mm, larger than the ${sheet.page} page (${pw} × ${ph} mm).`;
-  }
-  return null;
+/** Says when the labels won't print where the margins put them, or at their full size. */
+function sheetFitNote(config: LabelConfig & { sheet: SheetLayout }) {
+  const geo = sheetGeometry(config);
+  if (geo.fits) return null;
+  const room = config.sheet.pagePaddingMm > 0 ? "inside the page padding" : `on the ${config.sheet.page} page`;
+  if (geo.scale >= 1) return `The grid is centred to fit ${room}.`;
+  const mm = (n: number) => +n.toFixed(1);
+  return `The labels print at ${Math.floor(geo.scale * 100)}% (${mm(geo.labelW)} × ${mm(geo.labelH)} mm) to fit ${room}.`;
 }
 
 function LabelPreview({ data, config }: { data: SpoolLabelData | PrinterLabelData; config: LabelConfig }) {
@@ -561,22 +573,36 @@ function SheetPreview({
   onPickSkip: (n: number) => void;
 }) {
   const sheet = config.sheet!;
-  const [pw, ph] = PAGE_SIZES_MM[sheet.page];
+  const geo = sheetGeometry({ ...config, sheet });
+  const pad = sheet.pagePaddingMm;
   return (
     <div className="grid justify-items-center gap-1">
-      <svg viewBox={`0 0 ${pw} ${ph}`} className="h-56 w-auto rounded-sm border bg-white" role="img" aria-label="First sheet">
+      <svg viewBox={`0 0 ${geo.pageW} ${geo.pageH}`} className="h-56 w-auto rounded-sm border bg-white" role="img" aria-label="First sheet">
+        {pad > 0 && (
+          <rect
+            x={pad}
+            y={pad}
+            width={geo.pageW - 2 * pad}
+            height={geo.pageH - 2 * pad}
+            fill="none"
+            stroke="#a1a1aa"
+            strokeWidth={0.6}
+            strokeDasharray="3 2"
+          >
+            <title>Page padding</title>
+          </rect>
+        )}
         {Array.from({ length: sheet.cols * sheet.rows }, (_, i) => {
-          const col = i % sheet.cols;
-          const row = Math.floor(i / sheet.cols);
+          const { x, y } = geo.cell(i);
           const state = i < skip ? "skip" : i < skip + count ? "label" : "empty";
           return (
             <rect
               key={i}
-              x={sheet.marginLeftMm + col * (config.widthMm + sheet.gapXMm)}
-              y={sheet.marginTopMm + row * (config.heightMm + sheet.gapYMm)}
-              width={config.widthMm}
-              height={config.heightMm}
-              rx={1.5}
+              x={x}
+              y={y}
+              width={geo.labelW}
+              height={geo.labelH}
+              rx={1.5 * geo.scale}
               className="cursor-pointer"
               fill={state === "label" ? "#18181b" : state === "skip" ? "#e4e4e7" : "#fff"}
               stroke="#a1a1aa"
@@ -810,6 +836,7 @@ function NumberField({
   step,
   suffix,
   hint,
+  className,
   onChange,
 }: {
   label: string;
@@ -819,6 +846,7 @@ function NumberField({
   step: number;
   suffix?: string;
   hint?: string;
+  className?: string;
   onChange: (v: number) => void;
 }) {
   const id = `num-${label.toLowerCase().replace(/\W+/g, "-")}`;
@@ -831,7 +859,7 @@ function NumberField({
   const n = Number(draft);
   const invalid = draft === "" || !Number.isFinite(n) || n < min || n > max;
   return (
-    <Field label={suffix ? `${label} (${suffix})` : label} htmlFor={id} hint={hint} error={invalid ? `${min}–${max}` : undefined}>
+    <Field label={suffix ? `${label} (${suffix})` : label} htmlFor={id} hint={hint} error={invalid ? `${min}–${max}` : undefined} className={className}>
       <Input
         id={id}
         type="number"

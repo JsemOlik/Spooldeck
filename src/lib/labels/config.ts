@@ -77,6 +77,8 @@ export const sheetSchema = z.object({
   marginLeftMm: z.number().min(0).max(100),
   gapXMm: z.number().min(0).max(50),
   gapYMm: z.number().min(0).max(50),
+  /** Space kept clear along the paper's edges, for printers that can't print to the edge. */
+  pagePaddingMm: z.number().min(0).max(30).default(0),
 });
 export type SheetLayout = z.infer<typeof sheetSchema>;
 
@@ -90,7 +92,44 @@ export type LabelConfig = z.infer<typeof labelConfigSchema>;
 
 export const PAGE_SIZES_MM = { A4: [210, 297], Letter: [215.9, 279.4] } as const;
 
-export type LabelPreset = { id: string; name: string; group: string; widthMm: number; heightMm: number; sheet?: SheetLayout };
+/**
+ * Where the labels sit on a sheet. Labels stay pagePaddingMm clear of the paper's edges: a grid that
+ * doesn't fit inside that is centred and, if it's too big, shrunk evenly until it fits.
+ */
+export function sheetGeometry({ widthMm: w, heightMm: h, sheet }: LabelConfig & { sheet: SheetLayout }) {
+  const [pageW, pageH] = PAGE_SIZES_MM[sheet.page];
+  const pad = sheet.pagePaddingMm;
+  const gridW = sheet.cols * w + (sheet.cols - 1) * sheet.gapXMm;
+  const gridH = sheet.rows * h + (sheet.rows - 1) * sheet.gapYMm;
+  // A little slack so presets measured to the hundredth of a millimetre still count as fitting.
+  const slack = 0.5;
+  const fits =
+    sheet.marginLeftMm >= pad - slack &&
+    sheet.marginTopMm >= pad - slack &&
+    sheet.marginLeftMm + gridW <= pageW - pad + slack &&
+    sheet.marginTopMm + gridH <= pageH - pad + slack;
+  const scale = fits ? 1 : Math.min(1, (pageW - 2 * pad) / gridW, (pageH - 2 * pad) / gridH);
+  const left = fits ? sheet.marginLeftMm : (pageW - gridW * scale) / 2;
+  const top = fits ? sheet.marginTopMm : (pageH - gridH * scale) / 2;
+  return {
+    pageW,
+    pageH,
+    /** 1 unless the grid had to shrink to fit. */
+    scale,
+    /** Whether the grid sits where the margins put it (false: centred to stay inside the padding). */
+    fits,
+    gridW,
+    gridH,
+    labelW: w * scale,
+    labelH: h * scale,
+    cell: (i: number) => ({
+      x: left + (i % sheet.cols) * (w + sheet.gapXMm) * scale,
+      y: top + Math.floor(i / sheet.cols) * (h + sheet.gapYMm) * scale,
+    }),
+  };
+}
+
+export type LabelPreset ={ id: string; name: string; group: string; widthMm: number; heightMm: number; sheet?: SheetLayout };
 
 export const LABEL_PRESETS: LabelPreset[] = [
   { id: "62x29", name: "62 × 29 mm", group: "Brother QL", widthMm: 62, heightMm: 29 },
@@ -106,7 +145,7 @@ export const LABEL_PRESETS: LabelPreset[] = [
     group: "Sticker sheets",
     widthMm: 70,
     heightMm: 37,
-    sheet: { page: "A4", cols: 3, rows: 8, marginTopMm: 0.5, marginLeftMm: 0, gapXMm: 0, gapYMm: 0 },
+    sheet: { page: "A4", cols: 3, rows: 8, marginTopMm: 0.5, marginLeftMm: 0, gapXMm: 0, gapYMm: 0, pagePaddingMm: 0 },
   },
   {
     id: "a4-2x7",
@@ -114,7 +153,7 @@ export const LABEL_PRESETS: LabelPreset[] = [
     group: "Sticker sheets",
     widthMm: 99.1,
     heightMm: 38.1,
-    sheet: { page: "A4", cols: 2, rows: 7, marginTopMm: 15.15, marginLeftMm: 4.65, gapXMm: 2.5, gapYMm: 0 },
+    sheet: { page: "A4", cols: 2, rows: 7, marginTopMm: 15.15, marginLeftMm: 4.65, gapXMm: 2.5, gapYMm: 0, pagePaddingMm: 0 },
   },
   {
     id: "letter-3x10",
@@ -122,7 +161,7 @@ export const LABEL_PRESETS: LabelPreset[] = [
     group: "Sticker sheets",
     widthMm: 66.7,
     heightMm: 25.4,
-    sheet: { page: "Letter", cols: 3, rows: 10, marginTopMm: 12.7, marginLeftMm: 4.8, gapXMm: 3.2, gapYMm: 0 },
+    sheet: { page: "Letter", cols: 3, rows: 10, marginTopMm: 12.7, marginLeftMm: 4.8, gapXMm: 3.2, gapYMm: 0, pagePaddingMm: 0 },
   },
 ];
 

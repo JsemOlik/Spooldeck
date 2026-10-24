@@ -4,7 +4,7 @@ import { PrintToolbar } from "@/components/labels/print-toolbar";
 import { getSpoolsForLabels } from "@/db/queries/spools";
 import { requireUser } from "@/lib/auth/dal";
 import { getBaseUrl } from "@/lib/base-url";
-import { decodeConfig, PAGE_SIZES_MM, type LabelConfig } from "@/lib/labels/config";
+import { decodeConfig, PAGE_SIZES_MM, sheetGeometry, type LabelConfig } from "@/lib/labels/config";
 import { buildLabelData, buildPrinterLabelData, getPrintersForLabels, type LabelData } from "@/lib/labels/data";
 import { idListParam, intParam } from "@/lib/params";
 import { getAppSettings } from "@/lib/settings";
@@ -99,10 +99,15 @@ function SheetPages({
   pageH: number;
 }) {
   const sheet = config.sheet!;
+  const geo = sheetGeometry({ ...config, sheet });
   const perPage = sheet.cols * sheet.rows;
   const start = Math.min(skip, perPage - 1);
   const slots: (LabelData | null)[] = [...Array<null>(start).fill(null), ...labels];
   const pages = Array.from({ length: Math.ceil(slots.length / perPage) }, (_, p) => slots.slice(p * perPage, (p + 1) * perPage));
+  // The page draws the cut guides instead of each label, so an edge two labels share is one line,
+  // as thick as every other.
+  const cutGuides = config.layout.border;
+  const labelConfig = cutGuides ? { ...config, layout: { ...config.layout, border: false } } : config;
 
   return pages.map((page, p) => (
     <div
@@ -110,19 +115,32 @@ function SheetPages({
       className="print-page relative overflow-hidden bg-white shadow-md"
       style={{ width: `${pageW}mm`, height: `${pageH}mm` }}
     >
-      {page.map((label, i) =>
-        label ? (
-          <div
-            key={i}
-            className="absolute"
-            style={{
-              left: `${sheet.marginLeftMm + (i % sheet.cols) * (config.widthMm + sheet.gapXMm)}mm`,
-              top: `${sheet.marginTopMm + Math.floor(i / sheet.cols) * (config.heightMm + sheet.gapYMm)}mm`,
-            }}
-          >
-            <LabelView data={label} config={config} />
+      {page.map((label, i) => {
+        if (!label) return null;
+        const { x, y } = geo.cell(i);
+        return (
+          <div key={i} className="absolute" style={{ left: `${x}mm`, top: `${y}mm`, width: `${geo.labelW}mm`, height: `${geo.labelH}mm` }}>
+            <div style={geo.scale < 1 ? { transform: `scale(${geo.scale})`, transformOrigin: "top left" } : undefined}>
+              <LabelView data={label} config={labelConfig} />
+            </div>
           </div>
-        ) : null,
+        );
+      })}
+      {cutGuides && (
+        <svg
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          width={`${pageW}mm`}
+          height={`${pageH}mm`}
+          viewBox={`0 0 ${pageW} ${pageH}`}
+        >
+          {/* Centred on the cut, so where two labels meet their strokes land on the same line. */}
+          {page.map((label, i) => {
+            if (!label) return null;
+            const { x, y } = geo.cell(i);
+            return <rect key={i} x={x} y={y} width={geo.labelW} height={geo.labelH} fill="none" stroke="#000" strokeWidth={0.3} />;
+          })}
+        </svg>
       )}
     </div>
   ));
