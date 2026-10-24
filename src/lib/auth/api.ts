@@ -4,7 +4,7 @@ import { getAppSettings } from "@/lib/settings";
 import { validateSessionToken, type SessionUser } from "./session";
 
 /**
- * Helpers for the bearer-token JSON API under /api/v1 (used by the iOS app).
+ * Helpers for the bearer-token JSON API under /api/v1.
  * Tokens are ordinary session tokens, so signing out everywhere revokes them too.
  */
 

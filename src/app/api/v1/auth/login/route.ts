@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const ua = req.headers.get("user-agent");
-    const { token, expiresAt } = await createSession(result.userId, (ua ?? "Spooldeck iOS").slice(0, 300));
+    const { token, expiresAt } = await createSession(result.userId, (ua ?? "Spooldeck API").slice(0, 300));
     const user = await db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, result.userId!), columns: { id: true, username: true } });
     return Response.json({ token, expiresAt, user });
   } catch (e) {
