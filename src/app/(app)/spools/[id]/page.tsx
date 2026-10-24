@@ -21,7 +21,7 @@ import { intParam } from "@/lib/params";
 import { qrSvg, spoolUrl } from "@/lib/qr";
 import { getAppSettings } from "@/lib/settings";
 import { estimateLengthM, pricePerGram } from "@/lib/weights";
-import { isPrinting, listPrinters } from "@/server/services/printers";
+import { isPrinting, listPrinters, toolLabel } from "@/server/services/printers";
 
 export async function generateMetadata({ params }: PageProps<"/spools/[id]">): Promise<Metadata> {
   const id = intParam((await params).id);
@@ -51,7 +51,8 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
     with: { spool: { columns: { id: true, code: true } } },
   });
   const scanned = sp.scanned === "1";
-  const loadedOn = printers.find((p) => p.spool?.id === spool.id);
+  const loadedOn = printers.find((p) => p.slots.some((s) => s.spool?.id === spool.id));
+  const loadedTool = loadedOn?.slots.find((s) => s.spool?.id === spool.id)?.tool ?? 0;
 
   return (
     <div className="grid gap-6">
@@ -78,7 +79,7 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
             {loadedOn && (
               <Link href="/printers" className="hover:text-foreground flex items-center gap-1">
                 <PrinterIcon className="size-3.5" />
-                On {loadedOn.name} · {printerState(loadedOn).label}
+                On {toolLabel(loadedOn, loadedTool)} · {printerState(loadedOn).label}
               </Link>
             )}
           </div>
@@ -109,7 +110,7 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
               spoolId={spool.id}
               filamentId={f.id}
               status={spool.status}
-              printers={printers.map((p) => ({ id: p.id, name: p.name, loaded: p.id === loadedOn?.id }))}
+              printers={printers.map((p) => ({ id: p.id, name: p.name, tools: p.tools, loadedTool: p.id === loadedOn?.id ? loadedTool : null }))}
             />
           </div>
         </CardContent>

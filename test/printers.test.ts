@@ -1,21 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "@/db";
 import { filaments, materials, printers, spools, usageLogs, users } from "@/db/schema";
 import { hashPassword } from "@/lib/auth/password";
-import { normalizeMoonrakerUrl } from "@/lib/moonraker";
+import { normalizePrinterUrl } from "@/lib/printers/http";
 import { gramsForLength } from "@/lib/weights";
-import { getLiveStatus, pollPrinter } from "@/server/printer-sync";
+import { getLiveStatus, pollPrinter, printFileRead } from "@/server/printer-sync";
 import { createPrinter, deletePrinter, listPrinters, loadSpool, updatePrinter } from "@/server/services/printers";
 import { POST as login } from "@/app/api/v1/auth/login/route";
 import { GET as listPrintersApi, POST as createPrinterApi } from "@/app/api/v1/printers/route";
 import { PUT as updatePrinterApi } from "@/app/api/v1/printers/[id]/route";
 import { POST as loadSpoolApi } from "@/app/api/v1/printers/[id]/spool/route";
+import { bgcode } from "./fixtures/bgcode";
 
 /** A stand-in for Moonraker's /printer/objects/query that tests drive by editing `printer`. */
-const printer = { state: "standby", filename: "", filament_used: 0, progress: 0, apiKey: "secret" as string | null };
+const printer = { state: "standby", filename: "", filament_used: 0, progress: 0, extruder: "extruder", apiKey: "secret" as string | null };
 const moonraker = Bun.serve({
   port: 0,
   fetch(req) {
@@ -30,6 +32,7 @@ const moonraker = Bun.serve({
         status: {
           print_stats: { state: printer.state, filename: printer.filename, filament_used: printer.filament_used, message: "" },
           display_status: { progress: printer.progress, message: null },
+          toolhead: { extruder: printer.extruder },
         },
       },
     });
@@ -45,11 +48,27 @@ async function entries(spoolId: number) {
 }
 
 async function job(printerId: number) {
-  return (await db.query.printers.findFirst({ where: eq(printers.id, printerId) }))!;
+  return (await db.query.printers.findFirst({ where: eq(printers.id, printerId) }))!.job;
 }
 
 function print(filename: string, mm: number, state = "printing") {
   Object.assign(printer, { filename, filament_used: mm, state });
+}
+
+let filamentId: number;
+beforeAll(async () => {
+  await migrate(db, { migrationsFolder: join(import.meta.dir, "..", "drizzle") });
+  const [pla] = await db.insert(materials).values({ name: "PLA-test", density: 1.24 }).returning();
+  const [f] = await db.insert(filaments).values({ name: "Galaxy Black", materialId: pla.id, diameter: 1.75 }).returning();
+  filamentId = f.id;
+});
+
+async function newSpools(...codes: string[]) {
+  const rows = await db
+    .insert(spools)
+    .values(codes.map((code) => ({ filamentId, code, initialWeight: 1000 })))
+    .returning();
+  return rows.map((r) => r.id);
 }
 
 describe("Moonraker printers", () => {
@@ -58,23 +77,13 @@ describe("Moonraker printers", () => {
   let spoolB: number;
 
   beforeAll(async () => {
-    await migrate(db, { migrationsFolder: join(import.meta.dir, "..", "drizzle") });
-    const [pla] = await db.insert(materials).values({ name: "PLA-test", density: 1.24 }).returning();
-    const [f] = await db.insert(filaments).values({ name: "Galaxy Black", materialId: pla.id, diameter: 1.75 }).returning();
-    const rows = await db
-      .insert(spools)
-      .values([
-        { filamentId: f.id, code: "PRNA", initialWeight: 1000 },
-        { filamentId: f.id, code: "PRNB", initialWeight: 1000 },
-      ])
-      .returning();
-    [spoolA, spoolB] = rows.map((r) => r.id);
+    [spoolA, spoolB] = await newSpools("PRNA", "PRNB");
   });
 
   test("normalizes pasted addresses", () => {
-    expect(normalizeMoonrakerUrl("voron.local:7125")).toBe("http://voron.local:7125");
-    expect(normalizeMoonrakerUrl(" http://voron.local/#/ ")).toBe("http://voron.local");
-    expect(normalizeMoonrakerUrl("https://printer.example.com/moonraker/")).toBe("https://printer.example.com/moonraker");
+    expect(normalizePrinterUrl("voron.local:7125")).toBe("http://voron.local:7125");
+    expect(normalizePrinterUrl(" http://voron.local/#/ ")).toBe("http://voron.local");
+    expect(normalizePrinterUrl("https://printer.example.com/moonraker/")).toBe("https://printer.example.com/moonraker");
   });
 
   test("converts extruded length to grams", () => {
@@ -86,11 +95,11 @@ describe("Moonraker printers", () => {
   test("adds a printer and reports a missing or wrong API key", async () => {
     const noKey = await createPrinter({ name: "Voron", url: MOONRAKER });
     expect(noKey).toMatchObject({ ok: true, online: false });
-    expect(noKey.message).toContain("needs an API key");
+    expect(noKey.message).toContain("needs a password or API key");
     printerId = noKey.id!;
 
     const wrong = await updatePrinter(printerId, { name: "Voron", url: MOONRAKER, apiKey: "nope" });
-    expect(wrong.message).toContain("rejected the API key");
+    expect(wrong.message).toContain("rejected the password or API key");
 
     const right = await updatePrinter(printerId, { name: "Voron", url: MOONRAKER, apiKey: "secret" });
     expect(right).toMatchObject({ ok: true, online: true });
@@ -118,7 +127,12 @@ describe("Moonraker printers", () => {
     expect(spool?.status).toBe("opened");
 
     const [view] = await listPrinters();
-    expect(view).toMatchObject({ hasApiKey: true, spool: { id: spoolA }, job: { printName: "benchy", grams: g(2000) } });
+    expect(view).toMatchObject({
+      kind: "moonraker",
+      hasApiKey: true,
+      slots: [{ tool: 0, spool: { id: spoolA }, grams: g(2000) }],
+      job: { printName: "benchy", grams: g(2000), usage: "counting" },
+    });
     expect(view.live).toMatchObject({ online: true, state: "printing" });
     expect(JSON.stringify(view)).not.toContain("secret");
   });
@@ -138,14 +152,14 @@ describe("Moonraker printers", () => {
     await pollPrinter(printerId);
 
     expect((await entries(spoolB)).map((e) => [e.grams, e.note])).toEqual([[g(1500), "Printed on Voron"]]);
-    expect(await job(printerId)).toMatchObject({ jobFile: null, jobUsageId: null });
+    expect(await job(printerId)).toBeNull();
   });
 
   test("a print that starts before a spool is loaded counts from its start", async () => {
     await loadSpool(printerId, null);
     print("clip.gcode", 400);
     await pollPrinter(printerId);
-    expect((await job(printerId)).jobFile).toBe("clip.gcode");
+    expect((await job(printerId))?.file).toBe("clip.gcode");
 
     await loadSpool(printerId, spoolA);
     print("clip.gcode", 600, "cancelled");
@@ -186,10 +200,40 @@ describe("Moonraker printers", () => {
     const other = await createPrinter({ name: "Ender", url: MOONRAKER, apiKey: "secret" });
     await loadSpool(other.id!, spoolA);
     const views = await listPrinters();
-    expect(views.find((p) => p.id === printerId)?.spool).toBeNull();
-    expect(views.find((p) => p.id === other.id)?.spool?.id).toBe(spoolA);
+    expect(views.find((p) => p.id === printerId)?.slots[0].spool).toBeNull();
+    expect(views.find((p) => p.id === other.id)?.slots[0].spool?.id).toBe(spoolA);
     expect(await deletePrinter(other.id!)).toMatchObject({ ok: true });
     expect(await loadSpool(printerId, 999_999)).toMatchObject({ error: "Spool not found" });
+  });
+
+  test("a toolchanger counts each extruder against its own spool", async () => {
+    const [t0, t1] = await newSpools("TC0", "TC1");
+    const tc = await createPrinter({ name: "Stealthchanger", url: MOONRAKER, apiKey: "secret", tools: "2" });
+    expect(await loadSpool(tc.id!, t0, 0)).toMatchObject({ ok: true, message: "Loaded on Stealthchanger · tool 1" });
+    expect(await loadSpool(tc.id!, t1, 1)).toMatchObject({ ok: true });
+    expect(await loadSpool(tc.id!, t1, 2)).toMatchObject({ fieldErrors: { tool: ["Pick a tool from 1 to 2"] } });
+
+    printer.extruder = "extruder";
+    print("two_colour.gcode", 1000);
+    await pollPrinter(tc.id!);
+    printer.extruder = "extruder1";
+    print("two_colour.gcode", 1500);
+    await pollPrinter(tc.id!);
+    printer.extruder = "extruder";
+    print("two_colour.gcode", 1800, "complete");
+    await pollPrinter(tc.id!);
+
+    expect((await entries(t0)).map((e) => [e.grams, e.note])).toEqual([[g(1300), "Printed on Stealthchanger"]]);
+    expect((await entries(t1)).map((e) => [e.grams, e.note])).toEqual([[g(500), "Printed on Stealthchanger"]]);
+
+    // Moving a spool to another tool takes it off the first one.
+    await loadSpool(tc.id!, t0, 1);
+    const view = (await listPrinters()).find((p) => p.id === tc.id)!;
+    expect(view.slots.map((s) => s.spool?.id ?? null)).toEqual([null, t0]);
+    // Fewer tools: spools on the ones that went come off.
+    await updatePrinter(tc.id!, { name: "Stealthchanger", url: MOONRAKER, tools: "1" });
+    expect((await listPrinters()).find((p) => p.id === tc.id)!.slots).toEqual([{ tool: 0, spool: null, grams: null }]);
+    await deletePrinter(tc.id!);
   });
 
   describe("JSON API", () => {
@@ -232,8 +276,182 @@ describe("Moonraker printers", () => {
       const list = await listPrintersApi(call("/printers"), none);
       const text = await list.text();
       expect(text).not.toContain("secret");
-      const prusa = (JSON.parse(text) as { id: number; hasApiKey: boolean; spool: { id: number } }[]).find((p) => p.id === id);
-      expect(prusa).toMatchObject({ hasApiKey: false, spool: { id: spoolB } });
+      const prusa = (JSON.parse(text) as { id: number }[]).find((p) => p.id === id);
+      expect(prusa).toMatchObject({ hasApiKey: false, slots: [{ spool: { id: spoolB } }] });
+
+      const badTool = await loadSpoolApi(call(`/printers/${id}/spool`, { spoolId: spoolB, tool: 3 }), params(id));
+      expect(badTool.status).toBe(400);
     });
   });
 });
+
+/** A stand-in for PrusaLink: /api/v1/job, file downloads under /usb, and Digest or X-Api-Key sign-in. */
+const prusa = {
+  job: null as null | Record<string, unknown>,
+  files: new Map<string, Blob>(),
+  downloads: 0,
+};
+const PASSWORD = "pl-pass";
+const NONCE = "8e1d4a";
+const md5 = (s: string) => createHash("md5").update(s).digest("hex");
+
+function signedIn(req: Request) {
+  if (req.headers.get("x-api-key") === PASSWORD) return true;
+  const header = req.headers.get("authorization") ?? "";
+  if (!header.startsWith("Digest ")) return false;
+  const p = Object.fromEntries([...header.matchAll(/(\w+)=(?:"([^"]*)"|([^,\s]+))/g)].map((m) => [m[1], m[2] ?? m[3]]));
+  // Buddy firmware's challenge has no qop, so the response is the plain RFC 2069 kind.
+  const ha1 = md5(`maker:Printer API:${PASSWORD}`);
+  return p.username === "maker" && p.nonce === NONCE && p.response === md5(`${ha1}:${NONCE}:${md5(`GET:${p.uri}`)}`);
+}
+
+const prusaLink = Bun.serve({
+  port: 0,
+  fetch(req) {
+    const url = new URL(req.url);
+    if (!signedIn(req)) {
+      return new Response("Unauthorized", { status: 401, headers: { "WWW-Authenticate": `Digest realm="Printer API", nonce="${NONCE}", stale=false` } });
+    }
+    if (url.pathname === "/api/v1/job") return prusa.job ? Response.json(prusa.job) : new Response(null, { status: 204 });
+    const file = prusa.files.get(decodeURIComponent(url.pathname));
+    if (file) {
+      prusa.downloads++;
+      return new Response(file);
+    }
+    return new Response("Not Found", { status: 404 });
+  },
+});
+afterAll(() => prusaLink.stop(true));
+const PRUSALINK = `http://127.0.0.1:${prusaLink.port}`;
+
+function prusaJob(id: number, state: string, progress: number, file: { name: string; download?: string; meta?: Record<string, unknown> }) {
+  prusa.job = {
+    id,
+    state,
+    progress,
+    time_remaining: 600,
+    time_printing: 60,
+    file: { name: file.name.slice(0, 8), display_name: file.name, path: "/usb", refs: file.download ? { download: file.download } : {}, meta: file.meta },
+  };
+}
+
+/** Polls, waits for a print file read the poll started, and polls again. */
+async function pollPrusa(id: number) {
+  await pollPrinter(id);
+  await printFileRead(id);
+  await pollPrinter(id);
+}
+
+describe("PrusaLink printers", () => {
+  let xl: number;
+  let left: number;
+  let right: number;
+
+  beforeAll(async () => {
+    [left, right] = await newSpools("XL1", "XL2");
+    // A two-head XL print: 10 g from tool 1, 4 g from tool 2 (an MMU3 print looks the same).
+    prusa.files.set(
+      "/usb/CUBE~1.BGC",
+      bgcode([
+        { type: 0, text: "Producer=PrusaSlicer 2.9.2\n" },
+        { type: 4, text: "filament used [g]=10.00, 4.00\nfilament used [mm]=3350, 1340\n", deflate: true },
+        { type: 1, size: 200_000 },
+      ]),
+    );
+  });
+
+  test("signs in with Digest, and says when the password is wrong", async () => {
+    const wrong = await createPrinter({ name: "XL", kind: "prusalink", url: PRUSALINK, username: "maker", apiKey: "nope", tools: "2" });
+    expect(wrong).toMatchObject({ ok: true, online: false });
+    expect(wrong.message).toContain("rejected the password");
+    xl = wrong.id!;
+    const right = await updatePrinter(xl, { name: "XL", kind: "prusalink", url: PRUSALINK, username: "maker", apiKey: PASSWORD, tools: "2" });
+    expect(right).toMatchObject({ online: true });
+    expect(getLiveStatus(xl)).toMatchObject({ online: true, status: { state: "standby" } });
+  });
+
+  test("an X-Api-Key works too", async () => {
+    const mini = await createPrinter({ name: "MINI", kind: "prusalink", url: PRUSALINK, apiKey: PASSWORD });
+    expect(mini).toMatchObject({ online: true });
+    const [view] = (await listPrinters()).filter((p) => p.id === mini.id);
+    expect(view).toMatchObject({ kind: "prusalink", username: null, tools: 1 });
+    await deletePrinter(mini.id!);
+  });
+
+  test("splits a print between the tools by the file's usage and the progress", async () => {
+    await loadSpool(xl, left, 0);
+    await loadSpool(xl, right, 1);
+    prusaJob(7, "PRINTING", 25, { name: "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", download: "/usb/CUBE~1.BGC" });
+    await pollPrusa(xl);
+    expect((await entries(left)).map((e) => [e.printName, e.grams, e.note])).toEqual([["Cube", 2.5, "Printing on XL"]]);
+    expect((await entries(right)).map((e) => e.grams)).toEqual([1]);
+
+    prusaJob(7, "PRINTING", 50, { name: "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", download: "/usb/CUBE~1.BGC" });
+    await pollPrusa(xl);
+    const view = (await listPrinters()).find((p) => p.id === xl)!;
+    expect(view.job).toEqual({ printName: "Cube", grams: 7, usage: "counting" });
+    expect(view.slots.map((s) => s.grams)).toEqual([5, 2]);
+    // The file is read once per job.
+    expect(prusa.downloads).toBe(1);
+  });
+
+  test("a stopped print keeps what it used up to then", async () => {
+    prusaJob(7, "STOPPED", 60, { name: "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", download: "/usb/CUBE~1.BGC" });
+    await pollPrusa(xl);
+    expect((await entries(left)).map((e) => [e.grams, e.note])).toEqual([[6, "Cancelled on XL"]]);
+    expect((await entries(right)).map((e) => [e.grams, e.note])).toEqual([[2.4, "Cancelled on XL"]]);
+    expect(await job(xl)).toBeNull();
+  });
+
+  test("a finished print counts in full", async () => {
+    prusaJob(8, "PRINTING", 10, { name: "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", download: "/usb/CUBE~1.BGC" });
+    await pollPrusa(xl);
+    prusaJob(8, "FINISHED", 99, { name: "Cube_0.4n_0.2mm_PLA_XL_1h.bgcode", download: "/usb/CUBE~1.BGC" });
+    await pollPrusa(xl);
+    expect((await entries(left)).at(-1)).toMatchObject({ grams: 10, note: "Printed on XL" });
+    expect((await entries(right)).at(-1)).toMatchObject({ grams: 4, note: "Printed on XL" });
+    prusa.job = null;
+    await pollPrusa(xl);
+    expect(getLiveStatus(xl)).toMatchObject({ status: { state: "standby" } });
+  });
+
+  test("uses the stats Prusa-Link lists with the job, without downloading", async () => {
+    const mk3 = await createPrinter({ name: "MK3S", kind: "prusalink", url: PRUSALINK, username: "maker", apiKey: PASSWORD });
+    const [spool] = await newSpools("MK3");
+    await loadSpool(mk3.id!, spool);
+    const downloads = prusa.downloads;
+    // Two MMU slots on a printer set up with one tool: it all comes off the one spool.
+    prusaJob(9, "PRINTING", 50, { name: "Hook.gcode", meta: { "filament used [g]": "3.00, 1.00", "filament used [mm]": "1000, 330" } });
+    await pollPrusa(mk3.id!);
+    expect((await entries(spool)).map((e) => [e.printName, e.grams])).toEqual([["Hook", 2]]);
+    expect(prusa.downloads).toBe(downloads);
+    prusa.job = null;
+    await pollPrusa(mk3.id!);
+    await deletePrinter(mk3.id!);
+  });
+
+  test("a file without usage stats can't be counted, and says so", async () => {
+    prusa.files.set("/usb/CURA.GCO", new Blob([";Generated with Cura\nG28\n;Filament used: 1.2m\n"]));
+    prusaJob(10, "PRINTING", 30, { name: "cura.gcode", download: "/usb/CURA.GCO" });
+    await pollPrusa(xl);
+    const view = (await listPrinters()).find((p) => p.id === xl)!;
+    expect(view.job).toMatchObject({ printName: "cura", usage: "missing" });
+    prusa.job = null;
+    await pollPrusa(xl);
+    expect(await job(xl)).toBeNull();
+  });
+
+  test("an unreachable file is tried again later, and the print waits for it", async () => {
+    prusaJob(11, "PRINTING", 40, { name: "Gone.bgcode", download: "/usb/GONE.BGC" });
+    await pollPrusa(xl);
+    expect((await listPrinters()).find((p) => p.id === xl)!.job).toMatchObject({ usage: "reading" });
+    prusaJob(11, "FINISHED", 100, { name: "Gone.bgcode", download: "/usb/GONE.BGC" });
+    await pollPrusa(xl);
+    // Still held: the usage isn't known yet.
+    expect((await job(xl))?.key).toBe("11");
+    prusa.job = null;
+    await pollPrusa(xl);
+    expect(await job(xl)).toBeNull();
+  });
+});
+

@@ -38,7 +38,7 @@ export default async function PrintersPage() {
     <>
       <PageHeader
         title="Printers"
-        description="Klipper printers report what they print, and the filament comes off the loaded spool as it goes."
+        description="Klipper and Prusa printers report what they print, and the filament comes off the loaded spools as it goes."
         actions={printers.length > 0 && addButton}
       />
       {printers.length > 0 && <AutoRefresh seconds={printers.some(isPrinting) ? 3 : 10} />}
@@ -48,8 +48,8 @@ export default async function PrintersPage() {
             <PrinterIcon className="text-muted-foreground size-10" />
             <div className="font-medium">No printers yet</div>
             <p className="text-muted-foreground max-w-sm text-sm">
-              Connect a Klipper printer through Moonraker and pick the spool that&apos;s loaded. While it prints, the spool&apos;s
-              remaining weight goes down live.
+              Connect a Klipper printer through Moonraker or a Prusa through PrusaLink, and pick the spool that&apos;s loaded on
+              each tool. While it prints, the spools&apos; remaining weight goes down live.
             </p>
             {addButton}
           </CardContent>

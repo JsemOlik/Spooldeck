@@ -32,6 +32,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SpoolStatus } from "@/db/schema";
@@ -45,15 +48,15 @@ export function SpoolActionsMenu({
   spoolId: number;
   filamentId: number;
   status: SpoolStatus;
-  /** Printers this spool can go on; `loaded` marks the one it's on. */
-  printers?: { id: number; name: string; loaded: boolean }[];
+  /** Printers this spool can go on; `loadedTool` is set on the one it's on. */
+  printers?: { id: number; name: string; tools: number; loadedTool: number | null }[];
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
   const setStatus = (s: SpoolStatus) => startTransition(() => setSpoolStatusAction(spoolId, s));
-  const load = (printerId: number, load: boolean) =>
+  const load = (printerId: number, tool: number, load: boolean) =>
     startTransition(async () => {
-      const result = await loadSpoolAction(printerId, load ? spoolId : null);
+      const result = await loadSpoolAction(printerId, load ? spoolId : null, tool);
       if (result.ok) toast.success(result.message);
       else toast.error(result.error);
     });
@@ -86,12 +89,33 @@ export function SpoolActionsMenu({
             </Link>
           </DropdownMenuItem>
           {printers.length > 0 && <DropdownMenuSeparator />}
-          {printers.map((p) => (
-            <DropdownMenuItem key={p.id} onSelect={() => load(p.id, !p.loaded)}>
-              <PrinterIcon />
-              {p.loaded ? `Unload from ${p.name}` : `Load on ${p.name}`}
-            </DropdownMenuItem>
-          ))}
+          {printers.map((p) =>
+            p.loadedTool != null ? (
+              <DropdownMenuItem key={p.id} onSelect={() => load(p.id, p.loadedTool!, false)}>
+                <PrinterIcon />
+                Unload from {p.tools > 1 ? `${p.name} · tool ${p.loadedTool + 1}` : p.name}
+              </DropdownMenuItem>
+            ) : p.tools > 1 ? (
+              <DropdownMenuSub key={p.id}>
+                <DropdownMenuSubTrigger>
+                  <PrinterIcon />
+                  Load on {p.name}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {Array.from({ length: p.tools }, (_, tool) => (
+                    <DropdownMenuItem key={tool} onSelect={() => load(p.id, tool, true)}>
+                      Tool {tool + 1}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              <DropdownMenuItem key={p.id} onSelect={() => load(p.id, 0, true)}>
+                <PrinterIcon />
+                Load on {p.name}
+              </DropdownMenuItem>
+            ),
+          )}
           <DropdownMenuSeparator />
           {status !== "empty" && (
             <DropdownMenuItem onSelect={() => setStatus("empty")}>

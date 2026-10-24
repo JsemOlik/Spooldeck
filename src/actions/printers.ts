@@ -24,9 +24,9 @@ export async function deletePrinterAction(id: number) {
   return result;
 }
 
-export async function loadSpoolAction(printerId: number, spoolId: number | null) {
+export async function loadSpoolAction(printerId: number, spoolId: number | null, tool = 0) {
   await requireUser();
-  const result = await loadSpool(printerId, spoolId);
+  const result = await loadSpool(printerId, spoolId, tool);
   if (result.ok) revalidatePath("/", "layout");
   return result;
 }

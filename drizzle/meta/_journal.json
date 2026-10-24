@@ -15,6 +15,20 @@
       "when": 1792848402552,
       "tag": "0001_printers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792850724829,
+      "tag": "0002_printer_tools",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792850725402,
+      "tag": "0003_printer_old_columns",
+      "breakpoints": true
     }
   ]
 }
