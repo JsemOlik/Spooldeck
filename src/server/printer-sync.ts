@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { getSpoolRows } from "@/db/queries/spools";
@@ -146,8 +147,8 @@ export async function applyReading(printer: Printer, loaded: { tool: number; spo
   }
   if (!job) {
     if (!ACTIVE.has(reading.state)) return saveJob(printer, null);
-    job = { key: reading.jobKey ?? "", file: reading.filename, counter: 0, amounts: [], bases: [], entries: [] };
-  }
+    job = { id: randomUUID(), key: reading.jobKey ?? "", file: reading.filename, counter: 0, amounts: [], bases: [], entries: [] };
+  } else if (!job.id) job = { ...job, id: randomUUID() };
   if (prusa && job.filaments === undefined) {
     const filaments = jobFilaments(printer, reading);
     if (filaments !== undefined) job = { ...job, filaments };
@@ -208,7 +209,15 @@ export async function applyReading(printer: Printer, loaded: { tool: number; spo
       } else if (grams > 0) {
         const [inserted] = await db
           .insert(usageLogs)
-          .values({ spoolId: spool.id, grams, kind: "print", printName: printNameFromFile(job.file || reading.filename), note })
+          .values({
+            spoolId: spool.id,
+            grams,
+            kind: "print",
+            printName: printNameFromFile(job.file || reading.filename),
+            note,
+            printerId: printer.id,
+            printJob: job.id,
+          })
           .returning({ id: usageLogs.id });
         entry = { tool: t, spoolId: spool.id, usageId: inserted.id };
         await syncStatus(spool.id);

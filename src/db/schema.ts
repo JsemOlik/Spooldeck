@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -166,9 +166,17 @@ export const usageLogs = pgTable(
     kind: text("kind", { enum: USAGE_KINDS }).notNull().default("print"),
     printName: text("print_name"),
     note: text("note"),
+    // The printer that reported this print, and the print it belongs to: a print on several
+    // tools has one entry per tool (and per spool swapped in mid-print), all with the same printJob.
+    printerId: integer("printer_id").references((): AnyPgColumn => printers.id, { onDelete: "set null" }),
+    printJob: text("print_job"),
     createdAt: createdAt(),
   },
-  (t) => [index("usage_spool_idx").on(t.spoolId), index("usage_created_idx").on(t.createdAt)],
+  (t) => [
+    index("usage_spool_idx").on(t.spoolId),
+    index("usage_created_idx").on(t.createdAt),
+    index("usage_printer_idx").on(t.printerId),
+  ],
 );
 
 export const filamentNotes = pgTable(
@@ -214,6 +222,8 @@ export type PrinterKind = (typeof PRINTER_KINDS)[number];
  * it per tool. Each tool's open usage entry covers `amounts[tool] - bases[tool]`.
  */
 export type PrinterJob = {
+  /** Stored on the job's usage entries as printJob. Missing on jobs tracked before it existed. */
+  id?: string;
   key: string;
   file: string;
   counter: number;
@@ -292,12 +302,13 @@ export const spoolsRelations = relations(spools, ({ one, many }) => ({
 }));
 export const usageLogsRelations = relations(usageLogs, ({ one }) => ({
   spool: one(spools, { fields: [usageLogs.spoolId], references: [spools.id] }),
+  printer: one(printers, { fields: [usageLogs.printerId], references: [printers.id] }),
 }));
 export const filamentNotesRelations = relations(filamentNotes, ({ one }) => ({
   filament: one(filaments, { fields: [filamentNotes.filamentId], references: [filaments.id] }),
   spool: one(spools, { fields: [filamentNotes.spoolId], references: [spools.id] }),
 }));
-export const printersRelations = relations(printers, ({ many }) => ({ spools: many(printerSpools) }));
+export const printersRelations = relations(printers, ({ many }) => ({ spools: many(printerSpools), usage: many(usageLogs) }));
 export const printerSpoolsRelations = relations(printerSpools, ({ one }) => ({
   printer: one(printers, { fields: [printerSpools.printerId], references: [printers.id] }),
   spool: one(spools, { fields: [printerSpools.spoolId], references: [spools.id] }),
