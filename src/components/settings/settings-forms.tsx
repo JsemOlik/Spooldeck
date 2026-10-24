@@ -29,6 +29,19 @@ function useToastOnSuccess(state: ActionState, after?: () => void) {
   }, [state]);
 }
 
+/**
+ * True when the detected address only works on the server itself: a bind address like 0.0.0.0, or
+ * loopback. A reverse proxy that doesn't pass the Host header on gives the app its own upstream address.
+ */
+function isServerOnlyUrl(url: string) {
+  try {
+    const host = new URL(url).hostname;
+    return ["0.0.0.0", "[::]", "localhost", "[::1]"].includes(host) || host.startsWith("127.");
+  } catch {
+    return false;
+  }
+}
+
 export function GeneralSettingsForm({ settings, detectedUrl }: { settings: AppSettings; detectedUrl: string }) {
   const [state, action, pending] = useActionState(saveSettingsAction, initialActionState);
   useToastOnSuccess(state);
@@ -61,6 +74,12 @@ export function GeneralSettingsForm({ settings, detectedUrl }: { settings: AppSe
           <>
             Encoded in label QR codes so your phone camera can open spools. Leave empty to use the address you&apos;re on
             now ({detectedUrl}).
+            {!settings.publicUrl && isServerOnlyUrl(detectedUrl) && (
+              <span className="text-destructive mt-1 block">
+                Phones can&apos;t open {detectedUrl}. Enter the address you open Spooldeck at, or make your reverse proxy
+                pass the Host header on.
+              </span>
+            )}
           </>
         }
       >
