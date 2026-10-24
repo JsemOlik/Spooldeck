@@ -67,13 +67,16 @@ function isDark(hex: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45;
 }
 
+/** Spooldeck's orange (the app's primary colour and icon), as a hex value since labels print outside the theme. */
+const BRAND_HEX = "#df5200";
+
 /**
- * Spooldeck's spool on a tile of the filament's colour (or a printer on black, on a printer's label),
+ * Spooldeck's spool on a tile of the filament's colour (or a printer in Spooldeck's orange, on a printer's label),
  * for the middle of the QR code. The white margin keeps it apart from the modules around it; the
  * code's high error correction covers it.
  */
 function QrLogo({ color, printer }: { color: string | null; printer?: boolean }) {
-  const tile = color ?? "#000000";
+  const tile = printer ? BRAND_HEX : (color ?? "#000000");
   // The spool is black on light colours and white on dark ones, the hub the opposite.
   const [spool, hub] = isDark(tile) ? ["#ffffff", "#000000"] : ["#000000", "#ffffff"];
   return (
