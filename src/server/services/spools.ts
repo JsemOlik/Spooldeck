@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { filamentNotes, filaments, spools, usageLogs, type SpoolStatus } from "@/db/schema";
 import { vendorIdByName } from "@/db/queries/catalog";
@@ -6,7 +6,7 @@ import { getSpoolUsed } from "@/db/queries/spools";
 import { type ActionState, fromZodError } from "@/lib/action-state";
 import { generateSpoolCode } from "@/lib/codes";
 import { getAppSettings } from "@/lib/settings";
-import { newSpoolSchema, nullify, spoolSchema, usageSchema, weighInSchema } from "@/lib/validation";
+import { newSpoolSchema, nullify, printSchema, spoolSchema, usageSchema, weighInSchema } from "@/lib/validation";
 import { weighInUsage } from "@/lib/weights";
 
 /**
@@ -133,6 +133,38 @@ export async function logUsage(spoolId: number, input: Input): Promise<ActionSta
   });
   await syncStatus(spoolId);
   return { ok: true, message: `Logged ${parsed.data.grams} g` };
+}
+
+/**
+ * Logs one print across several spools (one entry per filament in a sliced file).
+ * Takes a plain object rather than a string record because `usage` is a list.
+ */
+export async function logPrint(input: unknown): Promise<ActionState & { usageIds?: number[] }> {
+  const parsed = printSchema.safeParse(input);
+  if (!parsed.success) return fromZodError(parsed.error);
+  const { usage } = parsed.data;
+  const printName = parsed.data.printName?.trim() || null;
+  const note = parsed.data.note?.trim() || null;
+
+  // Two extruders loaded from the same spool become one entry.
+  const bySpool = new Map<number, number>();
+  for (const u of usage) bySpool.set(u.spoolId, (bySpool.get(u.spoolId) ?? 0) + u.grams);
+  const spoolIds = [...bySpool.keys()];
+  const found = await db.select({ id: spools.id }).from(spools).where(inArray(spools.id, spoolIds));
+  if (found.length !== spoolIds.length) return { error: "Spool not found" };
+
+  const rows = await db
+    .insert(usageLogs)
+    .values(spoolIds.map((spoolId) => ({ spoolId, grams: Math.round(bySpool.get(spoolId)! * 100) / 100, kind: "print" as const, printName, note })))
+    .returning({ id: usageLogs.id });
+  for (const id of spoolIds) await syncStatus(id);
+
+  const total = Math.round([...bySpool.values()].reduce((a, b) => a + b, 0) * 100) / 100;
+  return {
+    ok: true,
+    usageIds: rows.map((r) => r.id),
+    message: spoolIds.length === 1 ? `Logged ${total} g` : `Logged ${total} g across ${spoolIds.length} spools`,
+  };
 }
 
 export async function weighIn(spoolId: number, input: Input): Promise<ActionState> {

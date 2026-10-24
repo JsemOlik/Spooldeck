@@ -9,6 +9,7 @@ import {
   createSpools,
   deleteSpool,
   deleteUsage,
+  logPrint,
   logUsage,
   setSpoolStatus,
   updateSpool,
@@ -61,4 +62,15 @@ export async function weighInAction(spoolId: number, _prev: ActionState, formDat
 export async function deleteUsageAction(usageId: number) {
   await requireUser();
   if (await deleteUsage(usageId)) revalidatePath("/", "layout");
+}
+
+export async function logPrintAction(input: {
+  printName?: string;
+  note?: string;
+  usage: { spoolId: number; grams: number }[];
+}): Promise<ActionState> {
+  await requireUser();
+  const result = await logPrint(input);
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }

@@ -77,6 +77,22 @@ export const usageSchema = z.object({
   note: optStr(2000),
 });
 
+/** A print that used one or more spools, e.g. from a multi-material G-code file. */
+export const printSchema = z.object({
+  printName: optStr(200),
+  note: optStr(2000),
+  usage: z
+    .array(
+      z.object({
+        spoolId: num().int().positive("Pick a spool"),
+        grams: num().min(0.1, "Enter the grams used").max(100_000),
+      }),
+      { error: "Add at least one spool" },
+    )
+    .min(1, "Add at least one spool")
+    .max(32),
+});
+
 export const weighInSchema = z.object({
   scaleGrams: num().min(0, "Must be ≥ 0").max(100_000),
   includesSpool: z.enum(["on", "off"]).optional(),

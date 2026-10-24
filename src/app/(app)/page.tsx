@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangleIcon, PackageIcon, PlusIcon, ScanLineIcon } from "lucide-react";
+import { AlertTriangleIcon, FileUpIcon, PackageIcon, PlusIcon, ScanLineIcon } from "lucide-react";
 import { ColorSwatch } from "@/components/color-swatch";
 import { PageHeader } from "@/components/page-header";
 import { RemainingBar } from "@/components/spools/remaining-bar";
@@ -24,6 +24,12 @@ export default async function DashboardPage() {
               <Link href="/spools/new">
                 <PlusIcon />
                 Add spool
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/log-print">
+                <FileUpIcon />
+                Log print
               </Link>
             </Button>
             <Button asChild>

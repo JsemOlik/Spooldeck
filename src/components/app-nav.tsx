@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  FileUpIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   type LucideIcon,
@@ -28,6 +29,7 @@ const ITEMS: NavItem[] = [
   { href: "/spools", label: "Spools", icon: PackageIcon },
   { href: "/filaments", label: "Filaments", icon: PaletteIcon },
   { href: "/scan", label: "Scan", icon: ScanLineIcon },
+  { href: "/log-print", label: "Log print", icon: FileUpIcon },
   { href: "/labels", label: "Labels", icon: TagIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -100,6 +102,9 @@ export function MobileHeader() {
         <Logo />
       </Link>
       <div className="flex items-center">
+        <Link href="/log-print" aria-label="Log print" className="p-2">
+          <FileUpIcon className="size-4" />
+        </Link>
         <Link href="/labels" aria-label="Labels" className="p-2">
           <TagIcon className="size-4" />
         </Link>
