@@ -49,7 +49,7 @@ Live camera scanning needs HTTPS or `localhost`. To try it on your phone, expose
 | `src/app/`           | Routes (App Router). `(app)` is everything behind login, `(auth)` login/setup. |
 | `src/actions/`       | Server Actions, one file per area. All mutations go through these.             |
 | `src/db/schema.ts`   | Drizzle schema. `src/db/queries/` holds the read queries used by pages.        |
-| `src/lib/`           | Logic without UI: Prusament import, weights and costs, scan parsing, backups.  |
+| `src/lib/`           | Logic without UI: Prusament import, G-code parsing, weights and costs, backups. |
 | `src/lib/auth/`      | Password hashing, sessions and `requireUser()`.                                |
 | `src/components/ui/` | shadcn/ui building blocks. Feature components sit in sibling folders.          |
 | `drizzle/`           | Generated SQL migrations, applied automatically on startup.                    |

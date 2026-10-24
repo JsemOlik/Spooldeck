@@ -1,6 +1,6 @@
 # JSON API
 
-Spooldeck has a JSON API under `/api/v1` for scripts, home automation, shortcuts and other apps. It can do everything the web interface does: list and add spools, log prints, weigh in, manage filaments and notes, resolve scanned codes and import Prusament spools.
+Spooldeck has a JSON API under `/api/v1` for scripts, home automation, shortcuts and other apps. It can do everything the web interface does: list and add spools, log prints (also straight from G-code), weigh in, manage filaments and notes, resolve scanned codes and import Prusament spools.
 
 The API uses the same validation and logic as the web forms, so the rules and error messages are the same.
 
@@ -90,6 +90,24 @@ All paths are relative to `/api/v1`.
 | DELETE | `usage/{id}`            |                                                                                                      | Deletes a usage entry, adding its grams back to the spool.                               |
 
 **Spool fields:** `filamentId` and `initialWeight` (grams of filament, without the spool) are required. Optional: `spoolWeight`, `price`, `currency`, `vendor`, `purchaseDate`, `purchaseUrl`, `location`, `status`, `notes`.
+
+### Prints from sliced files
+
+| Method | Path           | Body / query                                     | Notes                                                                                          |
+| ------ | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| POST   | `prints/parse` | A `.gcode` or `.bgcode` file; `name` (query)     | Reads PrusaSlicer's filament usage. Returns the print name, `filaments` and `suggestions`.      |
+| POST   | `prints`       | `{printName?, note?, usage: [{spoolId, grams}]}` | Logs one print across one or more spools. Entries for the same spool are added together.       |
+
+Send the file to `prints/parse` as the raw request body (with `?name=` for the print name) or as the `file` field of a multipart form. It returns 422 when the file has no PrusaSlicer usage stats. Each entry in `filaments` has the extruder `index`, `grams` (null when the profile had no density), `cm3`, `mm`, `type`, `colorHex` and `profile`; `suggestions` holds the suggested spool id (or null) for each entry. Logging a print from a script after slicing then takes two calls:
+
+```bash
+curl -X POST "https://spools.example.com/api/v1/prints/parse?name=benchy.gcode" \
+  -H "Authorization: Bearer $TOKEN" --data-binary @benchy.gcode
+
+curl -X POST https://spools.example.com/api/v1/prints \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"printName":"benchy","usage":[{"spoolId":3,"grams":12.4}]}'
+```
 
 ### Filaments and notes
 

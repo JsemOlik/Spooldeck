@@ -7,7 +7,7 @@ A self-hosted filament tracker for 3D printing. It runs as a single-user app wit
 
 - **Scan a Prusament spool** and the app imports the spool's real data (net and empty-spool weight, length, manufacture date, diameter tolerance, nozzle and bed temps, color).
 - **Print your own labels** for any other spool. Stick one on the box; scanning it, even with the phone's normal camera app, opens that spool.
-- **Log usage per print**, or weigh the spool and enter the scale reading. Remaining weight, estimated length and cost per print are calculated from that.
+- **Log usage per print**: upload the G-code from PrusaSlicer and the filament it used comes off the right spools, even for multi-material prints. You can also type in the grams, or weigh the spool and enter the scale reading. Remaining weight, estimated length and cost per print are calculated from that.
 - **Keep the details:** brand, material, color, temps, drying settings, price, where you bought it and storage location, plus dated notes like "strings above 230 °C" for the next time you use the same filament.
 
 Built with Next.js 16, bun, PostgreSQL (Drizzle ORM) and Tailwind/shadcn.
@@ -109,6 +109,14 @@ Open **Labels** to design one:
   - In the browser's print dialog, choose margins **None** and scale **100%**.
   - On a label printer, pick the matching paper size.
   - On a sticker sheet, use **Skip cells** to begin on a partly used sheet.
+
+## Logging prints from PrusaSlicer
+
+Open **Log print** and drop in the file PrusaSlicer exported, either plain `.gcode` or binary `.bgcode` (the default for the MK4, XL and MINI). Spooldeck reads how much filament each extruder used and suggests a spool for each one by matching the material, the filament profile name and the colour. Check the suggestions, change any spool or amount, and save.
+
+- **Multi-material:** each extruder or MMU slot gets its own row. Pick "Don't log this filament" for any you don't want to track.
+- **Missing density:** if the filament profile in PrusaSlicer has no density, the slicer reports only a volume. Spooldeck then estimates the grams from the chosen spool's material density.
+- **Privacy:** the file is read in your browser. Only the print name and the grams are sent to the server.
 
 ## JSON API
 
