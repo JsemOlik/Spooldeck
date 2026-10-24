@@ -106,7 +106,7 @@ This prints a new random password and signs out every session. Outside Docker, r
 Open **Labels** to design one:
 
 - **Size:** pick a preset (Brother QL 62 mm, 50×30/40×30 thermal, Niimbot/Dymo, A4 and Letter sticker sheets) or enter any size in mm.
-- **Content and layout:** choose which fields to show and where the QR code goes, then save the setup as a template.
+- **Content and layout:** a label shows the brand, the colour name, the material and spool code, and a bar in the filament's colour, with the Spooldeck spool on that colour in the middle of the QR code. Add the nozzle and bed temperatures or other fields under **Fields**, move the QR code, and save the setup as a template.
 - **Printing:** select spools and press **Print**. The print view sets the page size to match the label.
   - In the browser's print dialog, choose margins **None** and scale **100%**.
   - On a label printer, pick the matching paper size.
