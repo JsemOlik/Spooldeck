@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLinkIcon, MapPinIcon } from "lucide-react";
+import { ExternalLinkIcon, MapPinIcon, PrinterIcon } from "lucide-react";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { ColorSwatch } from "@/components/color-swatch";
 import { NoteForm, NotesList } from "@/components/filaments/notes";
+import { printerState } from "@/components/printers/printer-status";
 import { SpecList } from "@/components/spec-list";
 import { RemainingBar } from "@/components/spools/remaining-bar";
 import { SpoolActionsMenu } from "@/components/spools/spool-actions-menu";
@@ -19,6 +21,7 @@ import { intParam } from "@/lib/params";
 import { qrSvg, spoolUrl } from "@/lib/qr";
 import { getAppSettings } from "@/lib/settings";
 import { estimateLengthM, pricePerGram } from "@/lib/weights";
+import { isPrinting, listPrinters } from "@/server/services/printers";
 
 export async function generateMetadata({ params }: PageProps<"/spools/[id]">): Promise<Metadata> {
   const id = intParam((await params).id);
@@ -29,7 +32,7 @@ export async function generateMetadata({ params }: PageProps<"/spools/[id]">): P
 export default async function SpoolPage({ params, searchParams }: PageProps<"/spools/[id]">) {
   const id = intParam((await params).id);
   if (!id) notFound();
-  const [spool, settings, sp] = await Promise.all([getSpoolDetail(id), getAppSettings(), searchParams]);
+  const [spool, settings, sp, printers] = await Promise.all([getSpoolDetail(id), getAppSettings(), searchParams, listPrinters()]);
   if (!spool) notFound();
 
   const f = spool.filament;
@@ -48,9 +51,11 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
     with: { spool: { columns: { id: true, code: true } } },
   });
   const scanned = sp.scanned === "1";
+  const loadedOn = printers.find((p) => p.spool?.id === spool.id);
 
   return (
     <div className="grid gap-6">
+      {loadedOn && <AutoRefresh seconds={isPrinting(loadedOn) ? 3 : 15} />}
       <div className="flex flex-wrap items-start gap-4">
         <ColorSwatch hex={f.colorHex} className="size-16" />
         <div className="min-w-0 flex-1">
@@ -69,6 +74,12 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
                 <MapPinIcon className="size-3.5" />
                 {spool.location}
               </span>
+            )}
+            {loadedOn && (
+              <Link href="/printers" className="hover:text-foreground flex items-center gap-1">
+                <PrinterIcon className="size-3.5" />
+                On {loadedOn.name} · {printerState(loadedOn).label}
+              </Link>
             )}
           </div>
         </div>
@@ -94,7 +105,12 @@ export default async function SpoolPage({ params, searchParams }: PageProps<"/sp
           <div className="flex gap-2">
             <LogUsageDialog spoolId={spool.id} remaining={remaining} defaultOpen={scanned} />
             <WeighInDialog spoolId={spool.id} spoolWeight={spool.spoolWeight} />
-            <SpoolActionsMenu spoolId={spool.id} filamentId={f.id} status={spool.status} />
+            <SpoolActionsMenu
+              spoolId={spool.id}
+              filamentId={f.id}
+              status={spool.status}
+              printers={printers.map((p) => ({ id: p.id, name: p.name, loaded: p.id === loadedOn?.id }))}
+            />
           </div>
         </CardContent>
       </Card>

@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { AlertTriangleIcon, FileUpIcon, PackageIcon, PlusIcon, ScanLineIcon } from "lucide-react";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { ColorSwatch } from "@/components/color-swatch";
 import { PageHeader } from "@/components/page-header";
+import { PrintersOverview } from "@/components/printers/printers-overview";
 import { RemainingBar } from "@/components/spools/remaining-bar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboard } from "@/db/queries/dashboard";
 import { formatGrams, formatMoney, relativeTime } from "@/lib/format";
 import { getAppSettings } from "@/lib/settings";
+import { isPrinting, listPrinters } from "@/server/services/printers";
 
 export default async function DashboardPage() {
   const settings = await getAppSettings();
-  const d = await getDashboard(settings.lowStockGrams, settings.currency);
+  const [d, printers] = await Promise.all([getDashboard(settings.lowStockGrams, settings.currency), listPrinters()]);
   const maxMaterial = Math.max(1, ...d.byMaterial.map((m) => m.grams));
 
   return (
@@ -58,6 +61,13 @@ export default async function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {printers.length > 0 && (
+        <div className="mb-6">
+          <AutoRefresh seconds={printers.some(isPrinting) ? 3 : 15} />
+          <PrintersOverview printers={printers} />
+        </div>
+      )}
 
       {d.spoolCount === 0 && d.recent.length === 0 ? (
         <Card>

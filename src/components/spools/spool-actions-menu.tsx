@@ -2,7 +2,19 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { ArchiveIcon, CopyIcon, MoreHorizontalIcon, PackageCheckIcon, PackageXIcon, PencilIcon, TagIcon, Trash2Icon } from "lucide-react";
+import {
+  ArchiveIcon,
+  CopyIcon,
+  MoreHorizontalIcon,
+  PackageCheckIcon,
+  PackageXIcon,
+  PencilIcon,
+  PrinterIcon,
+  TagIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { loadSpoolAction } from "@/actions/printers";
 import { deleteSpoolAction, setSpoolStatusAction } from "@/actions/spools";
 import {
   AlertDialog,
@@ -24,10 +36,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { SpoolStatus } from "@/db/schema";
 
-export function SpoolActionsMenu({ spoolId, filamentId, status }: { spoolId: number; filamentId: number; status: SpoolStatus }) {
+export function SpoolActionsMenu({
+  spoolId,
+  filamentId,
+  status,
+  printers = [],
+}: {
+  spoolId: number;
+  filamentId: number;
+  status: SpoolStatus;
+  /** Printers this spool can go on; `loaded` marks the one it's on. */
+  printers?: { id: number; name: string; loaded: boolean }[];
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
   const setStatus = (s: SpoolStatus) => startTransition(() => setSpoolStatusAction(spoolId, s));
+  const load = (printerId: number, load: boolean) =>
+    startTransition(async () => {
+      const result = await loadSpoolAction(printerId, load ? spoolId : null);
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.error);
+    });
 
   return (
     <>
@@ -56,6 +85,13 @@ export function SpoolActionsMenu({ spoolId, filamentId, status }: { spoolId: num
               Add another of this filament
             </Link>
           </DropdownMenuItem>
+          {printers.length > 0 && <DropdownMenuSeparator />}
+          {printers.map((p) => (
+            <DropdownMenuItem key={p.id} onSelect={() => load(p.id, !p.loaded)}>
+              <PrinterIcon />
+              {p.loaded ? `Unload from ${p.name}` : `Load on ${p.name}`}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuSeparator />
           {status !== "empty" && (
             <DropdownMenuItem onSelect={() => setStatus("empty")}>
