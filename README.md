@@ -119,6 +119,8 @@ Open **Labels** to design one:
   - In the browser's print dialog, choose margins **None** and scale **100%**.
   - On a label printer, pick the matching paper size.
   - On a sticker sheet, use **Skip cells** to begin on a partly used sheet.
+  - If your printer can't print to the edge of the paper, set **Page padding** on the sheet. The labels shrink just enough to stay that far from the edges, and stay touching each other.
+  - With **Border (cut guide)** on, labels on a sheet share their cut lines, so every line is the same thickness.
 
 ## Logging prints from PrusaSlicer
 
